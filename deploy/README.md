@@ -9,13 +9,16 @@ shared except the machine and the PostgreSQL instance.
 |---|---|
 | Server dir | `/home/asnidev/trailkeeper/backend` |
 | Service | `trailkeeper-api.service` |
-| Port | `8110` (localhost + LAN) |
-| Public URL | `https://trailkeeper.asnidev.com` (Cloudflare Tunnel → `localhost:8110`) |
+| Port | `9110` (localhost + LAN) |
+| Public URL | `https://trailkeeper.asnidev.com` (Cloudflare Tunnel → `localhost:9110`) |
 | Database | `trailkeeper` on the existing Postgres, role `trailkeeper` |
 
-Port `8110` must match in three places: this service unit, the cloudflared
+Port `9110` must match in three places: this service unit, the cloudflared
 ingress, and the Android app's `LAN_API_BASE_URL` / `API_BASE_URL` in
-`android/app/build.gradle.kts`.
+`android/app/build.gradle.kts`. (Not `8110` as originally planned - AzuraCast
+occupies the whole `8000`-`8499` range on this box in a dense per-station
+pattern; `9110` sits clear of it. Check `ss -ltn` for anything new before
+picking a different port later.)
 
 ---
 
@@ -64,7 +67,7 @@ sudo mv /tmp/trailkeeper-api.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now trailkeeper-api.service
 systemctl status trailkeeper-api.service
-curl -s localhost:8110/health               # -> {"status":"ok"}
+curl -s localhost:9110/health               # -> {"status":"ok"}
 ```
 
 ### 4. Cloudflare Tunnel
@@ -73,7 +76,7 @@ Add the public hostname (see `cloudflared-ingress.example.yml` for both the
 dashboard and local-config forms):
 
 - **Dashboard:** Zero Trust → Networks → Tunnels → your tunnel → Public
-  Hostname → `trailkeeper` . `asnidev.com` → `HTTP` → `localhost:8110`.
+  Hostname → `trailkeeper` . `asnidev.com` → `HTTP` → `localhost:9110`.
 - **Local config:** add the `ingress` rule, then
   `cloudflared tunnel route dns <tunnel> trailkeeper.asnidev.com` and restart
   the `cloudflared` service.

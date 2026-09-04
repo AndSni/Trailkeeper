@@ -5,7 +5,7 @@
 # A) Dashboard-managed tunnel (Zero Trust -> Networks -> Tunnels):
 #    add a Public Hostname:
 #      Subdomain: trailkeeper       Domain: asnidev.com
-#      Type: HTTP                   URL: localhost:8110
+#      Type: HTTP                   URL: localhost:9110
 #    Nothing to edit on the server; the DNS CNAME is created for you.
 #
 # B) Local-config tunnel (~/.cloudflared/config.yml): add the hostname rule
@@ -16,7 +16,7 @@ ingress:
   # ... existing sharpright.asnidev.com rule stays above or below, order only
   #     matters relative to the catch-all ...
   - hostname: trailkeeper.asnidev.com
-    service: http://localhost:8110
+    service: http://localhost:9110
 
   # keep this last
   - service: http_status:404

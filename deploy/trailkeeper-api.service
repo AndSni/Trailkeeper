@@ -22,9 +22,9 @@ WorkingDirectory=/home/asnidev/trailkeeper/backend
 EnvironmentFile=/home/asnidev/trailkeeper/backend/.env
 # 0.0.0.0 so both the Cloudflare Tunnel (via localhost) and a phone on the
 # same wifi LAN (via the host's 192.168.50.27 address - see the Android
-# app's LAN_API_BASE_URL) reach it. Port 8110 is arbitrary but fixed: it
+# app's LAN_API_BASE_URL) reach it. Port 9110 is arbitrary but fixed: it
 # must match the cloudflared ingress and the Android build config.
-ExecStart=/home/asnidev/trailkeeper/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8110
+ExecStart=/home/asnidev/trailkeeper/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 9110
 Restart=always
 RestartSec=3
 # Wait for Postgres to actually accept connections on a cold boot.

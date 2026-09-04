@@ -1,5 +1,5 @@
 # OPTIONAL - not needed for the API alone (the Cloudflare Tunnel can point
-# straight at uvicorn on :8110). Add Caddy in front only from Phase 6, when
+# straight at uvicorn on :9110). Add Caddy in front only from Phase 6, when
 # there's a web console to serve and .pmtiles map files to range-serve.
 #
 # If you do run Caddy, point the Cloudflare Tunnel at Caddy instead
@@ -11,7 +11,7 @@ trailkeeper.asnidev.com {
 	# API
 	handle /api/* {
 		uri strip_prefix /api
-		reverse_proxy 127.0.0.1:8110
+		reverse_proxy 127.0.0.1:9110
 	}
 
 	# Offline map tiles - a single .pmtiles file served with range requests,
