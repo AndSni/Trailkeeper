@@ -1,0 +1,34 @@
+# Trailkeeper API - systemd unit for the always-on server.
+#
+# Install:
+#   sudo cp deploy/trailkeeper-api.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now trailkeeper-api.service
+#
+# Mirrors SharpRight's sharpright-backend.service: same host user, a sibling
+# directory, its own venv and .env, its own port. Nothing is shared with
+# SharpRight except the machine and the PostgreSQL instance.
+
+[Unit]
+Description=Trailkeeper API (FastAPI/Uvicorn)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=asnidev
+Group=asnidev
+WorkingDirectory=/home/asnidev/trailkeeper/backend
+EnvironmentFile=/home/asnidev/trailkeeper/backend/.env
+# 0.0.0.0 so both the Cloudflare Tunnel (via localhost) and a phone on the
+# same wifi LAN (via the host's 192.168.50.27 address - see the Android
+# app's LAN_API_BASE_URL) reach it. Port 8110 is arbitrary but fixed: it
+# must match the cloudflared ingress and the Android build config.
+ExecStart=/home/asnidev/trailkeeper/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8110
+Restart=always
+RestartSec=3
+# Wait for Postgres to actually accept connections on a cold boot.
+ExecStartPre=/bin/sh -c 'until pg_isready -q; do sleep 1; done'
+
+[Install]
+WantedBy=multi-user.target

@@ -35,10 +35,10 @@ createdb trailkeeper_test
 
 cp .env.example .env          # then edit DATABASE_URL + JWT_SECRET
 alembic upgrade head
-uvicorn app.main:app --reload --port 8100
+uvicorn app.main:app --reload --port 8110
 ```
 
-API docs at <http://127.0.0.1:8100/docs>.
+API docs at <http://127.0.0.1:8110/docs>. Deployment: [`deploy/`](deploy/).
 
 ### Tests
 
@@ -60,7 +60,7 @@ echo "sdk.dir=/path/to/Android/Sdk" > local.properties   # or let Android Studio
 ```
 
 The app resolves the backend three ways (external Cloudflare Tunnel → LAN →
-`adb reverse tcp:8100 tcp:8100`), the same probe pattern as SharpRight's
+`adb reverse tcp:8110 tcp:8110`), the same probe pattern as SharpRight's
 `ApiClient`. Edit the `*_API_BASE_URL` fields in `app/build.gradle.kts` to
 match your server.
 

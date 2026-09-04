@@ -1,0 +1,33 @@
+# OPTIONAL - not needed for the API alone (the Cloudflare Tunnel can point
+# straight at uvicorn on :8110). Add Caddy in front only from Phase 6, when
+# there's a web console to serve and .pmtiles map files to range-serve.
+#
+# If you do run Caddy, point the Cloudflare Tunnel at Caddy instead
+# (service: http://localhost:8088) and use this site block:
+
+trailkeeper.asnidev.com {
+	encode zstd gzip
+
+	# API
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy 127.0.0.1:8110
+	}
+
+	# Offline map tiles - a single .pmtiles file served with range requests,
+	# no tile-server process (see docs/BLUEPRINT.md sec 9).
+	handle /tiles/* {
+		root * /home/asnidev/trailkeeper/tiles
+		file_server {
+			precompressed
+		}
+		header Access-Control-Allow-Origin *
+	}
+
+	# Web console (static React build)
+	handle {
+		root * /home/asnidev/trailkeeper/web
+		try_files {path} /index.html
+		file_server
+	}
+}

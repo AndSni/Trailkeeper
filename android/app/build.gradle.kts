@@ -32,11 +32,13 @@ android {
         //    docs/BLUEPRINT.md sec 14.)
         //  - LAN_API_BASE_URL: the server's wifi-LAN address, device on the
         //    same network.
-        //  - API_BASE_URL: local dev loop, `adb reverse tcp:8100 tcp:8100`
+        //  - API_BASE_URL: local dev loop, `adb reverse tcp:8110 tcp:8110`
         //    against a backend run on this machine.
+        // Port 8110 must match deploy/trailkeeper-api.service and the
+        // cloudflared ingress - see deploy/README.md.
         buildConfigField("String", "EXTERNAL_API_BASE_URL", "\"https://trailkeeper.asnidev.com/\"")
-        buildConfigField("String", "LAN_API_BASE_URL", "\"http://192.168.50.27:8100/\"")
-        buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:8100/\"")
+        buildConfigField("String", "LAN_API_BASE_URL", "\"http://192.168.50.27:8110/\"")
+        buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:8110/\"")
     }
 
     signingConfigs {
