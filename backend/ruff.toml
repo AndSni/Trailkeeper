@@ -1,0 +1,12 @@
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+ignore = [
+    "B008",  # FastAPI uses `Depends(...)` as a default value by design
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["E402"]        # conftest sets env vars before importing the app
+"app/alembic/*" = ["E501", "I", "UP", "W291"]

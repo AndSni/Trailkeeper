@@ -1,0 +1,37 @@
+# --- Python / backend ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.log
+
+# Secrets / local config
+.env
+backend/.env
+!*.env.example
+
+# --- Android ---
+*.iml
+.gradle/
+android/local.properties
+android/.idea/
+android/build/
+android/app/build/
+android/captures/
+android/.cxx/
+*.keystore
+*.jks
+android/keystore.properties
+android/app/google-services.json
+
+# --- OS / editor ---
+.DS_Store
+*.swp
+
+# --- Claude Code ---
+.claude/settings.local.json
+.claude/worktrees/
