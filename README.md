@@ -9,14 +9,14 @@ Modelled on [Trail Sentinel](https://trail-sentinel.com)'s feature set, with a
 work-quantification model it doesn't have (measured segments → productivity
 rates). Full plan: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md).
 
-> Status: **Phase 0** — identity + workspace core. Backend only so far.
+> Status: **Phase 0** — identity + workspace core (backend + Android shell).
 
 ## Layout
 
 | Path | What |
 |------|------|
 | `backend/` | FastAPI + SQLAlchemy 2.0 + Alembic API (Python 3.12+) |
-| `android/` | Kotlin / Jetpack Compose field app *(scaffold lands next)* |
+| `android/` | Kotlin / Jetpack Compose field app — Gradle setup, theme and `ApiClient` probe reused from SharpRight (`com.asnidev.trailkeeper`) |
 | `docs/` | Product & technical blueprint |
 
 ## Backend — quick start
@@ -51,7 +51,22 @@ TEST_DATABASE_URL=postgresql+psycopg://USER:PASS@127.0.0.1:5432/trailkeeper_test
 The suite creates the schema from the models, runs each test in a rolled-back
 transaction, and skips itself entirely if no test database is reachable.
 
+## Android — quick start
+
+```bash
+cd android
+echo "sdk.dir=/path/to/Android/Sdk" > local.properties   # or let Android Studio write it
+./gradlew :app:assembleDebug
+```
+
+The app resolves the backend three ways (external Cloudflare Tunnel → LAN →
+`adb reverse tcp:8100 tcp:8100`), the same probe pattern as SharpRight's
+`ApiClient`. Edit the `*_API_BASE_URL` fields in `app/build.gradle.kts` to
+match your server.
+
 ## What Phase 0 covers
+
+**Backend**
 
 - Email + password auth with JWT access / refresh tokens
 - Open registration that bootstraps the first organisation (owner)
@@ -59,6 +74,15 @@ transaction, and skips itself entirely if no test database is reachable.
 - Organisation settings, members, role changes (owner / admin / editor / viewer)
 - Project CRUD with per-project membership and visibility rules
 - Alembic migrations
+
+**Android**
+
+- Compose shell: login / create-organisation screen → project list with
+  create-project dialog and sign-out
+- `TokenStore` (DataStore) + an OkHttp `Authenticator` that refreshes the
+  access token on a 401 and drops to the login screen if the refresh fails
+- `Session` holds app-wide auth state; Gradle wrapper, theme scaffold and the
+  backend-URL probe lifted from SharpRight
 
 ## Roadmap
 
