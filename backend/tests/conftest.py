@@ -88,5 +88,17 @@ def owner(client):
     return {"headers": headers, "tokens": tokens, "org_id": org_id}
 
 
+@pytest.fixture()
+def owner_project(client, owner):
+    """A project created by `owner`, who is its lead. Returns (project_id, headers)."""
+    resp = client.post(
+        "/projects",
+        headers=owner["headers"],
+        json={"name": "Blue Trail Rebuild", "activity": "mtb"},
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"], owner["headers"]
+
+
 def auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}

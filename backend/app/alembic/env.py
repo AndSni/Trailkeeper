@@ -1,6 +1,7 @@
 from logging.config import fileConfig
 
 from alembic import context
+from geoalchemy2.alembic_helpers import include_object, render_item
 from sqlalchemy import engine_from_config, pool
 
 from app import models  # noqa: F401  registers every model on Base.metadata
@@ -23,6 +24,8 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        render_item=render_item,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -39,6 +42,8 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            render_item=render_item,
+            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()

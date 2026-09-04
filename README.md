@@ -21,17 +21,22 @@ rates). Full plan: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md).
 
 ## Backend — quick start
 
-Requires Python 3.12+ and a PostgreSQL 14+ instance. PostGIS is **not** needed
-for Phase 0; it becomes a requirement in Phase 1 (geography).
+Requires Python 3.12+, a PostgreSQL 14+ instance, and the `postgis` package
+installed on it (`sudo dnf install postgis` / `sudo apt install
+postgresql-<ver>-postgis-3` - Phase 0 didn't need this, Phase 1 does).
 
 ```bash
 cd backend
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements-dev.txt
 
-# One-time: create the dev + test databases (adjust role/host to taste)
+# One-time: create the dev + test databases (adjust role/host to taste)...
 createdb trailkeeper
 createdb trailkeeper_test
+# ...and enable PostGIS in each. CREATE EXTENSION needs a superuser, so this
+# is the one step the app's own DB role can't do for itself:
+sudo -u postgres psql -d trailkeeper -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+sudo -u postgres psql -d trailkeeper_test -c "CREATE EXTENSION IF NOT EXISTS postgis;"
 
 cp .env.example .env          # then edit DATABASE_URL + JWT_SECRET
 alembic upgrade head
@@ -83,6 +88,28 @@ match your server.
   access token on a 401 and drops to the login screen if the refresh fails
 - `Session` holds app-wide auth state; Gradle wrapper, theme scaffold and the
   backend-URL probe lifted from SharpRight
+
+## What Phase 1 covers so far (geography core)
+
+Needs **PostGIS** on the database (`CREATE EXTENSION postgis;` - Phase 0 runs
+without it). Not yet built: MapLibre on Android, live GPS, offline tiles, the
+`change_log` sync engine, GPX *recording*. This slice is the backend that
+piece will talk to.
+
+- **Trails** - org-wide `LineString` geometry, GPX import (`gpxpy`, one Trail
+  per track segment), manual create via a point list, GeoJSON out, length
+  computed on read (`ST_Length` on the geography cast, never stored)
+- **Tasks** - `Point` geometry, priority/status, assignees, auto-attaches to
+  the nearest trail within 75 m (`ST_Distance` on the geography cast) when
+  created or moved, one-tap `/complete` that auto-logs a `WorkLog` from the
+  task's estimate
+- **Task photos** - uploaded to local disk (`backend/data/uploads/`, not
+  MinIO - see `docs/BLUEPRINT.md` §16), served through an authenticated route
+  that checks project visibility rather than a static file mount
+- **Work logs** - hours against a task or a trail; editable by their author
+  or an org admin
+- Visibility for all of the above follows the same project-membership rules
+  as Phase 0's projects (`app/authz.py`, shared by every route)
 
 ## Roadmap
 

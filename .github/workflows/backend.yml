@@ -12,7 +12,11 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # The postgis/postgis image runs `CREATE EXTENSION postgis` in
+        # POSTGRES_DB automatically at container init (as the Postgres
+        # superuser) - the app's own role never has that privilege, matching
+        # how it's actually set up in dev and prod (see deploy/README.md).
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: trailkeeper
           POSTGRES_PASSWORD: trailkeeper

@@ -14,6 +14,9 @@ venv/
 backend/.env
 !*.env.example
 
+# Uploaded task photos (local-disk storage - see docs/BLUEPRINT.md sec 16)
+backend/data/
+
 # --- Android ---
 *.iml
 .gradle/

@@ -16,17 +16,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.authz import is_org_admin, load_visible_project, require_admin_or_lead
 from app.db import get_db
 from app.deps import CurrentMembership, CurrentUser, require_org_role
-from app.models import (
-    Membership,
-    OrgRole,
-    Project,
-    ProjectMember,
-    ProjectRole,
-    ProjectStatus,
-    User,
-)
+from app.models import Membership, OrgRole, Project, ProjectMember, ProjectRole, ProjectStatus, User
 from app.schemas import (
     ProjectCreateIn,
     ProjectMemberIn,
@@ -41,46 +34,6 @@ DbSession = Annotated[Session, Depends(get_db)]
 AdminMembership = Annotated[Membership, Depends(require_org_role(OrgRole.admin))]
 
 
-def _is_org_admin(membership: Membership) -> bool:
-    return OrgRole(membership.org_role) in (OrgRole.owner, OrgRole.admin)
-
-
-def _load_visible_project(
-    project_id: uuid.UUID, membership: Membership, user: User, db: Session
-) -> Project:
-    project = db.get(Project, project_id)
-    if (
-        project is None
-        or project.organisation_id != membership.organisation_id
-        or project.deleted_at is not None
-    ):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
-    if _is_org_admin(membership):
-        return project
-    is_member = db.scalar(
-        select(ProjectMember).where(
-            ProjectMember.project_id == project.id, ProjectMember.user_id == user.id
-        )
-    )
-    if is_member is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
-    return project
-
-
-def _require_admin_or_lead(
-    project: Project, membership: Membership, user: User, db: Session
-) -> None:
-    if _is_org_admin(membership):
-        return
-    pm = db.scalar(
-        select(ProjectMember).where(
-            ProjectMember.project_id == project.id, ProjectMember.user_id == user.id
-        )
-    )
-    if pm is None or ProjectRole(pm.project_role) is not ProjectRole.lead:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Requires org admin or project lead")
-
-
 @router.get("", response_model=list[ProjectOut])
 def list_projects(
     membership: CurrentMembership,
@@ -92,7 +45,7 @@ def list_projects(
         Project.organisation_id == membership.organisation_id,
         Project.deleted_at.is_(None),
     )
-    if not _is_org_admin(membership):
+    if not is_org_admin(membership):
         stmt = stmt.join(ProjectMember, ProjectMember.project_id == Project.id).where(
             ProjectMember.user_id == user.id
         )
@@ -129,7 +82,7 @@ def create_project(
 def get_project(
     project_id: uuid.UUID, membership: CurrentMembership, user: CurrentUser, db: DbSession
 ) -> Project:
-    return _load_visible_project(project_id, membership, user, db)
+    return load_visible_project(project_id, membership, user, db)
 
 
 @router.patch("/{project_id}", response_model=ProjectOut)
@@ -140,8 +93,8 @@ def update_project(
     user: CurrentUser,
     db: DbSession,
 ) -> Project:
-    project = _load_visible_project(project_id, membership, user, db)
-    _require_admin_or_lead(project, membership, user, db)
+    project = load_visible_project(project_id, membership, user, db)
+    require_admin_or_lead(project, membership, user, db)
     if body.name is not None:
         project.name = body.name
     if body.description is not None:
@@ -159,7 +112,7 @@ def update_project(
 def delete_project(
     project_id: uuid.UUID, membership: AdminMembership, user: CurrentUser, db: DbSession
 ) -> None:
-    project = _load_visible_project(project_id, membership, user, db)
+    project = load_visible_project(project_id, membership, user, db)
     project.deleted_at = datetime.now(UTC)
     db.commit()
     return None
@@ -169,7 +122,7 @@ def delete_project(
 def list_project_members(
     project_id: uuid.UUID, membership: CurrentMembership, user: CurrentUser, db: DbSession
 ) -> list[ProjectMemberOut]:
-    project = _load_visible_project(project_id, membership, user, db)
+    project = load_visible_project(project_id, membership, user, db)
     rows = db.execute(
         select(ProjectMember, User)
         .join(User, User.id == ProjectMember.user_id)
@@ -196,8 +149,8 @@ def add_project_member(
     user: CurrentUser,
     db: DbSession,
 ) -> ProjectMemberOut:
-    project = _load_visible_project(project_id, membership, user, db)
-    _require_admin_or_lead(project, membership, user, db)
+    project = load_visible_project(project_id, membership, user, db)
+    require_admin_or_lead(project, membership, user, db)
 
     target_membership = db.scalar(
         select(Membership).where(
@@ -243,8 +196,8 @@ def remove_project_member(
     user: CurrentUser,
     db: DbSession,
 ) -> None:
-    project = _load_visible_project(project_id, membership, user, db)
-    _require_admin_or_lead(project, membership, user, db)
+    project = load_visible_project(project_id, membership, user, db)
+    require_admin_or_lead(project, membership, user, db)
     pm = db.scalar(
         select(ProjectMember).where(
             ProjectMember.project_id == project.id, ProjectMember.user_id == user_id

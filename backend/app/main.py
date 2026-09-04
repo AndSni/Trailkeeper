@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routes import auth, org, projects
+from app.routes import auth, org, projects, tasks, trails, work_logs
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -28,6 +28,9 @@ if settings.cors_origin_list:
 app.include_router(auth.router)
 app.include_router(org.router)
 app.include_router(projects.router)
+app.include_router(trails.router)
+app.include_router(tasks.router)
+app.include_router(work_logs.router)
 
 
 @app.get("/health", tags=["meta"])

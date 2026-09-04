@@ -26,6 +26,17 @@ class Settings(BaseSettings):
     # Comma-separated origins for the web console (Phase 6). Empty -> no CORS.
     cors_origins: str = ""
 
+    # Task photos, saved to local disk (see docs/BLUEPRINT.md sec 16 - MinIO
+    # is the upgrade path if this ever gets awkward; plain files are fine at
+    # this scale and need zero extra services). Relative paths resolve
+    # against the backend/ working directory.
+    upload_dir: str = "data/uploads"
+    max_upload_mb: int = 15
+
+    # How far (metres) a task's GPS point may be from a trail line to still
+    # auto-attach to it. Beyond this, nearest_trail_id is left null.
+    nearest_trail_max_m: float = 75.0
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
