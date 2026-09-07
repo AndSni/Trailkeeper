@@ -27,6 +27,7 @@ from app.db import get_db
 from app.deps import CurrentMembership, CurrentUser
 from app.geo import find_nearest_trail, point_wkt, to_geojson
 from app.models import Project, Task, TaskAssignee, TaskPhoto, TaskStatus, WorkLog
+from app.notifications import notify
 from app.schemas import (
     TaskAssigneesIn,
     TaskCompleteIn,
@@ -125,10 +126,36 @@ def _load_visible_task(
     return task, project
 
 
-def _set_assignees(db: Session, task_id: uuid.UUID, user_ids: list[uuid.UUID]) -> None:
+def _set_assignees(
+    db: Session, task_id: uuid.UUID, user_ids: list[uuid.UUID]
+) -> set[uuid.UUID]:
+    """Replace a task's assignees; return the ids that are newly added."""
+    before = set(
+        db.scalars(select(TaskAssignee.user_id).where(TaskAssignee.task_id == task_id))
+    )
     db.execute(TaskAssignee.__table__.delete().where(TaskAssignee.task_id == task_id))
-    for uid in dict.fromkeys(user_ids):  # de-dupe, keep order
+    wanted = list(dict.fromkeys(user_ids))  # de-dupe, keep order
+    for uid in wanted:
         db.add(TaskAssignee(task_id=task_id, user_id=uid))
+    return set(wanted) - before
+
+
+def notify_assigned(
+    db: Session, task: Task, added: set[uuid.UUID], actor_id: uuid.UUID
+) -> None:
+    if not added:
+        return
+    notify(
+        db,
+        organisation_id=task.organisation_id,
+        recipient_ids=added,
+        actor_id=actor_id,
+        type="task_assigned",
+        subject_type="task",
+        subject_id=task.id,
+        project_id=task.project_id,
+        body=f'You were assigned to "{task.title}"',
+    )
 
 
 @router.get("", response_model=list[TaskOut])
@@ -182,7 +209,8 @@ def create_task(
     db.add(task)
     db.flush()
     if body.assignee_ids:
-        _set_assignees(db, task.id, body.assignee_ids)
+        added = _set_assignees(db, task.id, body.assignee_ids)
+        notify_assigned(db, task, added, user.id)
     _record_task_change(db, task, "upsert", user.id)
     db.commit()
     return _get_out(db, task.id)
@@ -250,7 +278,8 @@ def set_assignees(
     db: DbSession,
 ) -> TaskOut:
     task, _project = _load_visible_task(db, task_id, membership, user)
-    _set_assignees(db, task.id, body.user_ids)
+    added = _set_assignees(db, task.id, body.user_ids)
+    notify_assigned(db, task, added, user.id)
     _record_task_change(db, task, "upsert", user.id)
     db.commit()
     return _get_out(db, task.id)

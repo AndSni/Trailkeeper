@@ -4,7 +4,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routes import auth, org, projects, sync, tasks, trails, work_logs
+from app.routes import (
+    auth,
+    messages,
+    notifications,
+    org,
+    projects,
+    sync,
+    tasks,
+    trails,
+    work_logs,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -31,6 +41,8 @@ app.include_router(projects.router)
 app.include_router(trails.router)
 app.include_router(tasks.router)
 app.include_router(work_logs.router)
+app.include_router(messages.router)
+app.include_router(notifications.router)
 app.include_router(sync.router)
 
 

@@ -302,6 +302,31 @@ class WorkLogOut(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# Messages / discussion
+# --------------------------------------------------------------------------- #
+
+
+class MessageCreateIn(BaseModel):
+    project_id: uuid.UUID
+    task_id: uuid.UUID | None = None  # null = the project's own thread
+    body: str = Field(min_length=1, max_length=8000)
+    mention_user_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class MessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organisation_id: uuid.UUID
+    project_id: uuid.UUID
+    task_id: uuid.UUID | None
+    author_id: uuid.UUID | None
+    body: str
+    mentioned_user_ids: list[uuid.UUID]
+    created_at: datetime
+
+
+# --------------------------------------------------------------------------- #
 # Sync
 # --------------------------------------------------------------------------- #
 
@@ -332,6 +357,7 @@ class SyncSnapshotOut(BaseModel):
     trails: list[TrailOut]
     tasks: list[TaskOut]
     work_logs: list[WorkLogOut]
+    messages: list[MessageOut] = []
     high_seq: int
 
 
@@ -363,3 +389,33 @@ class SyncOpResult(BaseModel):
 class SyncPushOut(BaseModel):
     results: list[SyncOpResult]
     high_seq: int
+
+
+# --------------------------------------------------------------------------- #
+# Notifications
+# --------------------------------------------------------------------------- #
+
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    type: str
+    subject_type: str
+    subject_id: uuid.UUID
+    project_id: uuid.UUID | None
+    actor_id: uuid.UUID | None
+    body: str
+    created_at: datetime
+    read_at: datetime | None
+
+
+class NotificationReadIn(BaseModel):
+    ids: list[uuid.UUID] = Field(default_factory=list)
+    all: bool = False
+
+
+class DeviceRegisterIn(BaseModel):
+    fcm_token: str = Field(min_length=1, max_length=255)
+    platform: str = Field(default="android", max_length=16)
+    app_version: str = Field(default="", max_length=32)

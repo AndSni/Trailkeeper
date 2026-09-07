@@ -26,6 +26,8 @@ from app.geo import find_nearest_trail, point_wkt
 from app.models import (
     ChangeLog,
     Membership,
+    Message,
+    ProjectMember,
     PushedOp,
     Task,
     TaskPriority,
@@ -33,8 +35,9 @@ from app.models import (
     User,
     WorkLog,
 )
-from app.routes.tasks import _set_assignees, fetch_task_out
-from app.schemas import SyncOpIn, SyncOpResult, SyncPushIn, SyncPushOut, WorkLogOut
+from app.routes.messages import _fan_out_notifications
+from app.routes.tasks import _set_assignees, fetch_task_out, notify_assigned
+from app.schemas import MessageOut, SyncOpIn, SyncOpResult, SyncPushIn, SyncPushOut, WorkLogOut
 from app.sync import record_change
 
 
@@ -64,6 +67,13 @@ class _WorkLogFields(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
 
+class _MessageFields(BaseModel):
+    project_id: uuid.UUID | None = None
+    task_id: uuid.UUID | None = None
+    body: str | None = Field(default=None, min_length=1, max_length=8000)
+    mention_user_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
 def _aware(dt: datetime | None) -> datetime | None:
     if dt is not None and dt.tzinfo is None:
         return dt.replace(tzinfo=UTC)
@@ -87,8 +97,21 @@ def _work_log_row(db: Session, log_id: uuid.UUID) -> dict | None:
     return WorkLogOut.model_validate(log).model_dump(mode="json") if log is not None else None
 
 
+def _message_row(db: Session, msg_id: uuid.UUID) -> dict | None:
+    msg = db.get(Message, msg_id)
+    if msg is None or msg.deleted_at is not None:
+        return None
+    return MessageOut.model_validate(msg).model_dump(mode="json")
+
+
 def _row_for(db: Session, entity_type: str, entity_id: uuid.UUID) -> dict | None:
-    return _task_row(db, entity_id) if entity_type == "task" else _work_log_row(db, entity_id)
+    if entity_type == "task":
+        return _task_row(db, entity_id)
+    if entity_type == "work_log":
+        return _work_log_row(db, entity_id)
+    if entity_type == "message":
+        return _message_row(db, entity_id)
+    return None
 
 
 def _result(op: SyncOpIn, status: str, *, server_seq=None, row=None, message=None) -> SyncOpResult:
@@ -149,6 +172,8 @@ def _apply(db: Session, op: SyncOpIn, membership: Membership, user: User) -> Syn
         return _apply_task(db, op, membership, user)
     if op.entity_type == "work_log":
         return _apply_work_log(db, op, membership, user)
+    if op.entity_type == "message":
+        return _apply_message(db, op, membership, user)
     raise _Rejected(f"unsupported entity_type {op.entity_type!r}")
 
 
@@ -212,7 +237,8 @@ def _apply_task(db: Session, op: SyncOpIn, membership: Membership, user: User) -
 
     db.flush()
     if fields.assignee_ids is not None:
-        _set_assignees(db, task.id, fields.assignee_ids)
+        added = _set_assignees(db, task.id, fields.assignee_ids)
+        notify_assigned(db, task, added, user.id)
     cl = record_change(
         db, entity_type="task", entity_id=task.id, op="upsert",
         organisation_id=project.organisation_id, project_id=project.id, actor_id=user.id,
@@ -278,3 +304,62 @@ def _apply_work_log(db: Session, op: SyncOpIn, membership: Membership, user: Use
     )
     db.flush()
     return _result(op, "applied", server_seq=cl.server_seq, row=_work_log_row(db, log.id))
+
+
+def _apply_message(db: Session, op: SyncOpIn, membership: Membership, user: User) -> SyncOpResult:
+    msg = db.get(Message, op.entity_id)
+
+    if op.op == "delete":
+        if msg is None or msg.deleted_at is not None:
+            return _result(op, "applied", row=None)
+        require_project_member(msg.project_id, membership, user, db)
+        if msg.author_id != user.id and not is_org_admin(membership):
+            raise _Rejected("only the author or an admin can delete a message")
+        msg.deleted_at = datetime.now(UTC)
+        cl = record_change(
+            db, entity_type="message", entity_id=msg.id, op="delete",
+            organisation_id=msg.organisation_id, project_id=msg.project_id, actor_id=user.id,
+        )
+        db.flush()
+        return _result(op, "applied", server_seq=cl.server_seq, row=None)
+
+    # upsert == create; messages are never edited, so an existing id is a no-op
+    if msg is not None:
+        return _result(op, "applied", row=_message_row(db, msg.id))
+
+    fields = _MessageFields.model_validate(op.fields)
+    if fields.project_id is None or not fields.body:
+        raise _Rejected("creating a message needs project_id and body")
+    project = require_project_member(fields.project_id, membership, user, db)
+
+    task = None
+    if fields.task_id is not None:
+        task = db.get(Task, fields.task_id)
+        if task is None or task.project_id != project.id or task.deleted_at is not None:
+            raise _Rejected("task not found in this project")
+
+    member_ids = set(
+        db.scalars(select(ProjectMember.user_id).where(ProjectMember.project_id == project.id))
+    )
+    mentioned = [uid for uid in dict.fromkeys(fields.mention_user_ids) if uid in member_ids]
+
+    msg = Message(
+        id=op.entity_id,
+        organisation_id=project.organisation_id,
+        project_id=project.id,
+        task_id=fields.task_id,
+        author_id=user.id,
+        body=fields.body,
+        mentioned_user_ids=[str(uid) for uid in mentioned],
+    )
+    db.add(msg)
+    db.flush()
+    cl = record_change(
+        db, entity_type="message", entity_id=msg.id, op="upsert",
+        organisation_id=project.organisation_id, project_id=project.id, actor_id=user.id,
+    )
+    _fan_out_notifications(
+        db, msg, project.organisation_id, task, member_ids, set(mentioned), user
+    )
+    db.flush()
+    return _result(op, "applied", server_seq=cl.server_seq, row=_message_row(db, msg.id))

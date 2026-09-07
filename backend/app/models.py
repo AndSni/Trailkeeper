@@ -19,6 +19,7 @@ from datetime import UTC, date, datetime
 from geoalchemy2 import Geometry
 from geoalchemy2.elements import WKBElement
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -378,6 +379,7 @@ CHANGE_ENTITY_TYPES = (
     "trail",
     "task",
     "work_log",
+    "message",
 )
 
 
@@ -426,5 +428,89 @@ class PushedOp(Base):
     entity_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)  # applied|conflict|rejected
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Collaboration (Phase 2) - comment threads, @mentions, the notification inbox.
+# See docs/BLUEPRINT.md sec 12.
+#
+# A "thread" is just the set of messages sharing a subject: task_id set = that
+# task's thread, task_id null = the project's thread. Messages are append-only
+# (soft-deleted, never edited) so they need no updated_at and sync through
+# /sync/push as create-or-delete.
+# --------------------------------------------------------------------------- #
+
+
+class Message(Base):
+    __tablename__ = "messages"
+    __table_args__ = (Index("ix_messages_thread", "project_id", "task_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organisations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True
+    )
+    author_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    # User ids the client flagged as @mentioned (resolved from the member list
+    # on the client). Stored as JSON - never queried by element.
+    mentioned_user_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    __table_args__ = (Index("ix_notifications_recipient", "recipient_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organisations.id", ondelete="CASCADE"), nullable=False
+    )
+    recipient_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # task_assigned | task_status_changed | task_commented | project_commented | mention
+    type: Mapped[str] = mapped_column(String(32), nullable=False)
+    # subject_type: task | project | message
+    subject_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    subject_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    body: Mapped[str] = mapped_column(String(500), nullable=False)  # pre-rendered summary
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
+    )
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DeviceToken(Base):
+    """FCM registration tokens per install - the push side of notifications.
+    Populated now; actual `firebase_admin` dispatch is wired when a Firebase
+    project exists (see app/notifications.py)."""
+
+    __tablename__ = "device_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    fcm_token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    platform: Mapped[str] = mapped_column(String(16), default="android", nullable=False)
+    app_version: Mapped[str] = mapped_column(String(32), default="", nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
     )

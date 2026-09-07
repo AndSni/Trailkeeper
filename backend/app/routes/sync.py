@@ -22,6 +22,7 @@ from app.db import get_db
 from app.deps import CurrentMembership, CurrentUser
 from app.models import (
     ChangeLog,
+    Message,
     Project,
     ProjectMember,
     Task,
@@ -32,6 +33,7 @@ from app.models import (
 from app.routes.tasks import fetch_task_out
 from app.routes.trails import fetch_trail_out
 from app.schemas import (
+    MessageOut,
     ProjectMemberOut,
     ProjectOut,
     SyncChangeOut,
@@ -88,6 +90,9 @@ def _serialize_entity(db: Session, entity_type: str, entity_id: uuid.UUID) -> di
     elif entity_type == "work_log":
         log = db.get(WorkLog, entity_id)
         out = WorkLogOut.model_validate(log) if log is not None else None
+    elif entity_type == "message":
+        msg = db.get(Message, entity_id)
+        out = None if msg is None or msg.deleted_at is not None else MessageOut.model_validate(msg)
     elif entity_type == "project":
         project = db.get(Project, entity_id)
         gone = project is None or project.deleted_at is not None
@@ -181,6 +186,11 @@ def get_snapshot(
         select(Task.id).where(Task.project_id == proj.id, Task.deleted_at.is_(None))
     )
     work_logs = db.scalars(select(WorkLog).where(WorkLog.project_id == proj.id))
+    msgs = db.scalars(
+        select(Message)
+        .where(Message.project_id == proj.id, Message.deleted_at.is_(None))
+        .order_by(Message.created_at)
+    )
 
     high_seq = db.scalar(
         select(func.coalesce(func.max(ChangeLog.server_seq), 0)).where(
@@ -194,5 +204,6 @@ def get_snapshot(
         trails=[t for tid in trail_rows if (t := fetch_trail_out(db, tid)) is not None],
         tasks=[t for tid in task_rows if (t := fetch_task_out(db, tid)) is not None],
         work_logs=[WorkLogOut.model_validate(w) for w in work_logs],
+        messages=[MessageOut.model_validate(m) for m in msgs],
         high_seq=high_seq or 0,
     )
