@@ -5,8 +5,7 @@ open. `GET /sync/changes?since=<server_seq>` - everything that changed after
 that cursor, collapsed to the latest state per entity. The client applies the
 snapshot, then polls /changes with the `high_seq` it hands back.
 
-The write half (`POST /sync/push`) lands with the Android outbox, so its
-conflict semantics are designed against a real client rather than guessed.
+`POST /sync/push` is the write half - see app/sync_push.py.
 """
 
 from __future__ import annotations
@@ -37,9 +36,12 @@ from app.schemas import (
     ProjectOut,
     SyncChangeOut,
     SyncChangesOut,
+    SyncPushIn,
+    SyncPushOut,
     SyncSnapshotOut,
     WorkLogOut,
 )
+from app.sync_push import apply_push
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
@@ -149,6 +151,16 @@ def get_changes(
             )
         )
     return SyncChangesOut(changes=changes, high_seq=high_seq, has_more=has_more)
+
+
+@router.post("/push", response_model=SyncPushOut)
+def push(
+    body: SyncPushIn, membership: CurrentMembership, user: CurrentUser, db: DbSession
+) -> SyncPushOut:
+    """Apply a batch of offline edits (tasks, work logs). Idempotent per
+    `client_op_id`; conflicting ops return the authoritative row unchanged.
+    See app/sync_push.py."""
+    return apply_push(db, body, membership, user)
 
 
 @router.get("/snapshot", response_model=SyncSnapshotOut)

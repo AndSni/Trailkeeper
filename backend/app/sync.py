@@ -23,14 +23,16 @@ def record_change(
     organisation_id: uuid.UUID,
     actor_id: uuid.UUID | None,
     project_id: uuid.UUID | None = None,
-) -> None:
-    db.add(
-        ChangeLog(
-            organisation_id=organisation_id,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            op=op,
-            project_id=project_id,
-            actor_id=actor_id,
-        )
+) -> ChangeLog:
+    """Append one change_log row. Returns it so callers that need the
+    assigned `server_seq` (e.g. /sync/push) can `db.flush()` and read it."""
+    cl = ChangeLog(
+        organisation_id=organisation_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        op=op,
+        project_id=project_id,
+        actor_id=actor_id,
     )
+    db.add(cl)
+    return cl

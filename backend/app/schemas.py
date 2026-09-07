@@ -333,3 +333,33 @@ class SyncSnapshotOut(BaseModel):
     tasks: list[TaskOut]
     work_logs: list[WorkLogOut]
     high_seq: int
+
+
+class SyncOpIn(BaseModel):
+    client_op_id: uuid.UUID  # client-generated idempotency key, one per op
+    entity_type: str  # "task" | "work_log"
+    entity_id: uuid.UUID  # client-minted for a create
+    op: str  # "upsert" | "delete"
+    # The updated_at the client last saw; null for a create. If the server
+    # row is newer, the op is a conflict and the server value wins.
+    base_updated_at: datetime | None = None
+    fields: dict = Field(default_factory=dict)
+
+
+class SyncPushIn(BaseModel):
+    ops: list[SyncOpIn] = Field(max_length=200)
+
+
+class SyncOpResult(BaseModel):
+    client_op_id: uuid.UUID
+    entity_type: str
+    entity_id: uuid.UUID
+    status: str  # "applied" | "conflict" | "rejected"
+    server_seq: int | None = None
+    row: dict | None = None  # the entity's authoritative current state
+    message: str | None = None
+
+
+class SyncPushOut(BaseModel):
+    results: list[SyncOpResult]
+    high_seq: int

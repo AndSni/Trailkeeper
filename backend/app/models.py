@@ -404,3 +404,27 @@ class ChangeLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
     )
+
+
+class PushedOp(Base):
+    """Idempotency ledger for `POST /sync/push`. A retried batch (flaky
+    network, app restart mid-push) re-sends the same client-generated
+    `client_op_id`s; if one is already here, the op is not re-applied - the
+    stored outcome + the entity's current state are returned instead.
+    """
+
+    __tablename__ = "pushed_ops"
+
+    client_op_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organisations.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    entity_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)  # applied|conflict|rejected
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
+    )
