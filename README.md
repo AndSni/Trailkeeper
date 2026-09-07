@@ -99,7 +99,12 @@ match your server.
   optimistically and queues an op in the `outbox` table. `drainOutbox()`
   (run before every pull, and right after an edit) posts the batch to
   `POST /sync/push`, folds the authoritative rows back in, and reports how
-  many edits lost a last-writer-wins conflict. MapLibre map + live GPS next.
+  many edits lost a last-writer-wins conflict.
+- **Map tab** - MapLibre Native (`ui/map/`) in an `AndroidView`, trails as
+  line layers and tasks as point layers fed from Room, camera auto-fits to
+  the data, live-GPS puck via the location component. Base map is
+  OpenFreeMap's free hosted "liberty" style; a self-hosted `.pmtiles` for
+  true offline use is the next slice (BLUEPRINT §9).
 
 ## What Phase 1 covers so far (geography core)
 

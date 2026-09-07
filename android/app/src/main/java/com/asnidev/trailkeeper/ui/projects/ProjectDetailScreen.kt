@@ -1,5 +1,9 @@
 package com.asnidev.trailkeeper.ui.projects
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -46,8 +51,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.asnidev.trailkeeper.ui.map.ProjectMap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -69,6 +77,21 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
     val s by vm.state.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showAdd by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    var hasLocation by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val requestLocation =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            hasLocation = it
+        }
+    LaunchedEffect(tab) {
+        if (tab == 2 && !hasLocation) requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
 
     Scaffold(
         topBar = {
@@ -113,13 +136,21 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
             TabRow(selectedTabIndex = tab) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Tasks (${s.tasks.size})") })
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Trails (${s.trails.size})") })
+                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Map") })
             }
 
             Box(Modifier.fillMaxSize()) {
                 when {
                     !s.loaded -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                     tab == 0 -> TaskList(s.tasks, onSetStatus = vm::setStatus)
-                    else -> TrailList(s.trails)
+                    tab == 1 -> TrailList(s.trails)
+                    else ->
+                        ProjectMap(
+                            trails = s.trails,
+                            tasks = s.tasks,
+                            hasLocationPermission = hasLocation,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                 }
             }
         }
