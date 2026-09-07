@@ -158,6 +158,26 @@ Android Room outbox). This slice is the backend the field app pulls from.
   Actual push dispatch is a stub in `app/notifications.py` until a Firebase
   project is set up for Trailkeeper
 
+## What Phase 4 covers (backend) - segment timing
+
+The feature nothing off-the-shelf has (`docs/BLUEPRINT.md` §10).
+
+- **Job types** (`GET/POST/PATCH/DELETE /job-types`) - how a kind of work is
+  measured (`unit` ∈ hours/km/m²/count), `default_crew`, `expected_rate` in
+  minutes-per-unit, colour, group. Org-wide; members read, admin+ mutates.
+  8 defaults seeded on org register (brushcutting, drainage dips, ...)
+- **Segment work records** (`GET/POST/PATCH/DELETE /segment-work`) - one
+  timed piece of work: a geometry (line / area / point), a **measured**
+  (`ST_Length`/`ST_Area` on the geography cast) or hand-entered quantity, the
+  active (un-paused) seconds, crew size, equipment, pauses
+- Derived, never stored: `person_hours`, `rate_min_per_unit`,
+  `throughput_per_hour`, `vs_expected_min_per_unit`
+- **Rollup** (`GET /segment-work/rollup?group_by=job_type|trail|member|week`)
+  - per group: count, Σ quantity, Σ person-hours, weighted mean rate
+  (Σ minutes / Σ quantity), expected rate, delta
+- Synced for offline viewing; creating a record is online for now (the timer
+  runs on the phone, saves on stop)
+
 ## Roadmap
 
 `P1` map + offline tiles + live GPS + GPX import + tasks + sync ·
