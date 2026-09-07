@@ -48,6 +48,10 @@ data class TaskEntity(
     val estimateMin: Int?,
     val assigneeIdsJson: String, // JSON array of user ids
     val photosJson: String, // JSON array of {id, caption, url}
+    // The server version this row reflects - sent as base_updated_at when an
+    // offline edit is pushed, so the server can detect a stale write. Empty
+    // for a row that only exists locally (not yet pushed).
+    val updatedAt: String,
 )
 
 @Entity(tableName = "work_logs")
@@ -61,6 +65,7 @@ data class WorkLogEntity(
     val workedOn: String,
     val note: String,
     val autoFromTask: Boolean,
+    val updatedAt: String,
 )
 
 @Entity(tableName = "project_members", primaryKeys = ["projectId", "userId"])
@@ -84,4 +89,20 @@ data class SyncStateEntity(
 data class ProjectSyncEntity(
     @PrimaryKey val projectId: String,
     val snapshotHighSeq: Long,
+)
+
+/**
+ * A pending offline write, queued for `POST /sync/push`. Rows are drained
+ * before every pull; each carries the fields as a JSON object and the
+ * client-generated [clientOpId] the server dedupes on.
+ */
+@Entity(tableName = "outbox")
+data class OutboxEntity(
+    @PrimaryKey val clientOpId: String,
+    val entityType: String, // "task" | "work_log"
+    val entityId: String,
+    val op: String, // "upsert" | "delete"
+    val baseUpdatedAt: String?, // null for a create
+    val fieldsJson: String, // JSON object of the changed fields
+    val createdAt: Long,
 )

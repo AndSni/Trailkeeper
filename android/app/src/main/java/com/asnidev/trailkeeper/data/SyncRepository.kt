@@ -1,44 +1,168 @@
 package com.asnidev.trailkeeper.data
 
 import androidx.room.withTransaction
+import com.asnidev.trailkeeper.data.local.OutboxEntity
 import com.asnidev.trailkeeper.data.local.ProjectSyncEntity
 import com.asnidev.trailkeeper.data.local.SyncStateEntity
+import com.asnidev.trailkeeper.data.local.TaskEntity
 import com.asnidev.trailkeeper.data.local.TrailkeeperDb
 import com.asnidev.trailkeeper.data.local.toEntity
 import com.asnidev.trailkeeper.network.ApiClient
 import com.asnidev.trailkeeper.network.ProjectDto
 import com.asnidev.trailkeeper.network.ProjectMemberDto
 import com.asnidev.trailkeeper.network.SyncChangeDto
+import com.asnidev.trailkeeper.network.SyncOpRequest
+import com.asnidev.trailkeeper.network.SyncPushRequest
 import com.asnidev.trailkeeper.network.TaskDto
 import com.asnidev.trailkeeper.network.TrailDto
 import com.asnidev.trailkeeper.network.WorkLogDto
 import com.google.gson.Gson
+import com.google.gson.JsonElement
 import com.google.gson.reflect.TypeToken
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Keeps the Room cache in step with the server (see docs/BLUEPRINT.md sec 8).
+ * Keeps the Room cache in step with the server (docs/BLUEPRINT.md sec 8).
  *
- * A project is seeded once from `GET /sync/snapshot`; after that every
- * `sync()` runs the org-wide incremental loop `GET /sync/changes?since=
- * <cursor>`, applying each change to Room and advancing the cursor. Snapshots
- * never move the org cursor - the incremental loop re-applying a handful of
- * changes already in a snapshot is idempotent and keeps every project
- * converging.
+ * Read: a project is seeded once from `GET /sync/snapshot`, then every
+ * [syncProject] runs the org-wide incremental loop `GET /sync/changes?since=
+ * <cursor>`. Snapshots never move the cursor - re-applying a few already-seen
+ * changes is idempotent.
+ *
+ * Write: offline edits are written to Room optimistically and queued in the
+ * `outbox`; [drainOutbox] posts them to `POST /sync/push` and folds the
+ * authoritative rows back in. It runs before every pull.
  */
 object SyncRepository {
     private val gson = Gson()
     private val db get() = TrailkeeperDb.db
 
-    /** Seed [projectId] if it hasn't been, then pull org-wide deltas. */
-    suspend fun syncProject(projectId: String) {
-        val orgId = Session.currentOrgId() ?: return
+    /** Result of one sync pass, so the caller can surface conflicts. */
+    data class Outcome(val conflicts: Int = 0, val rejected: Int = 0)
+
+    /** Push the outbox, seed [projectId] if new, then pull org-wide deltas. */
+    suspend fun syncProject(projectId: String): Outcome {
+        val orgId = Session.currentOrgId() ?: return Outcome()
+        val pushOutcome = drainOutbox()
         if (db.syncStateDao().projectSnapshotSeq(projectId) == null) {
             snapshotProject(projectId)
         }
         pullChanges(orgId)
+        return pushOutcome
     }
+
+    // ---- write path -----------------------------------------------------
+
+    suspend fun createTask(projectId: String, title: String, priority: String): String {
+        val orgId = Session.currentOrgId() ?: error("not signed in")
+        val id = UUID.randomUUID().toString()
+        val optimistic =
+            TaskEntity(
+                id = id,
+                projectId = projectId,
+                organisationId = orgId,
+                title = title,
+                description = "",
+                taskType = "",
+                priority = priority,
+                status = "open",
+                geometryJson = null,
+                nearestTrailId = null,
+                estimateMin = null,
+                assigneeIdsJson = "[]",
+                photosJson = "[]",
+                updatedAt = "",
+            )
+        db.taskDao().upsert(optimistic)
+        enqueue(
+            "task", id, "upsert", baseUpdatedAt = null,
+            fields = mapOf("project_id" to projectId, "title" to title, "priority" to priority),
+        )
+        drainOutbox()
+        return id
+    }
+
+    suspend fun setTaskStatus(taskId: String, status: String) {
+        val current = db.taskDao().getById(taskId) ?: return
+        db.taskDao().upsert(current.copy(status = status))
+        enqueue(
+            "task", taskId, "upsert",
+            baseUpdatedAt = current.updatedAt.ifBlank { null },
+            fields = mapOf("status" to status),
+        )
+        drainOutbox()
+    }
+
+    private suspend fun enqueue(
+        entityType: String,
+        entityId: String,
+        op: String,
+        baseUpdatedAt: String?,
+        fields: Map<String, Any?>,
+    ) {
+        db.outboxDao().insert(
+            OutboxEntity(
+                clientOpId = UUID.randomUUID().toString(),
+                entityType = entityType,
+                entityId = entityId,
+                op = op,
+                baseUpdatedAt = baseUpdatedAt,
+                fieldsJson = gson.toJson(fields),
+                createdAt = System.currentTimeMillis(),
+            )
+        )
+    }
+
+    /** Post every queued op; apply the returned rows; drop the queue entries. */
+    suspend fun drainOutbox(): Outcome {
+        val pending = db.outboxDao().all()
+        if (pending.isEmpty()) return Outcome()
+
+        val req =
+            SyncPushRequest(
+                ops =
+                    pending.map {
+                        SyncOpRequest(
+                            clientOpId = it.clientOpId,
+                            entityType = it.entityType,
+                            entityId = it.entityId,
+                            op = it.op,
+                            baseUpdatedAt = it.baseUpdatedAt,
+                            fields = gson.fromJson(it.fieldsJson, JsonElement::class.java),
+                        )
+                    }
+            )
+        val resp = ApiClient.api().push(req) // throws if offline -> queue stays intact
+
+        var conflicts = 0
+        var rejected = 0
+        db.withTransaction {
+            for (r in resp.results) {
+                when (r.status) {
+                    "conflict" -> conflicts++
+                    "rejected" -> rejected++
+                }
+                applyRow(r.entityType, r.entityId, r.row)
+                db.outboxDao().deleteById(r.clientOpId)
+            }
+        }
+        return Outcome(conflicts, rejected)
+    }
+
+    private suspend fun applyRow(entityType: String, entityId: String, row: JsonElement?) {
+        when (entityType) {
+            "task" ->
+                if (row == null) db.taskDao().deleteById(entityId)
+                else db.taskDao().upsert(gson.fromJson(row, TaskDto::class.java).toEntity())
+            "work_log" ->
+                if (row == null) db.workLogDao().deleteById(entityId)
+                else db.workLogDao().upsert(gson.fromJson(row, WorkLogDto::class.java).toEntity())
+        }
+    }
+
+    // ---- read path ----------------------------------------------------
 
     private suspend fun snapshotProject(projectId: String) {
         val snap = ApiClient.api().snapshot(projectId)
@@ -84,7 +208,6 @@ object SyncRepository {
                 if (c.op == "delete" || row == null) db.projectDao().deleteById(c.entityId)
                 else db.projectDao().upsert(gson.fromJson(row, ProjectDto::class.java).toEntity())
             "project_member" -> {
-                // entityId is the project id; row is the full member list.
                 db.projectMemberDao().deleteForProject(c.entityId)
                 if (row != null) {
                     val type = object : TypeToken<List<ProjectMemberDto>>() {}.type

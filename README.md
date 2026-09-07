@@ -94,7 +94,12 @@ match your server.
   `GET /sync/changes?since=<cursor>` (paged, deletes handled, cursor in
   `sync_state`). The detail screen renders straight from Room `Flow`s, so it
   shows the last sync offline and refreshes in place. Sign-out wipes the
-  cache. MapLibre map + the write outbox (`POST /sync/push`) are next.
+  cache.
+- **Write outbox** - creating a task / marking it done writes Room
+  optimistically and queues an op in the `outbox` table. `drainOutbox()`
+  (run before every pull, and right after an edit) posts the batch to
+  `POST /sync/push`, folds the authoritative rows back in, and reports how
+  many edits lost a last-writer-wins conflict. MapLibre map + live GPS next.
 
 ## What Phase 1 covers so far (geography core)
 

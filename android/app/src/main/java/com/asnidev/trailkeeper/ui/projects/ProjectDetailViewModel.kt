@@ -68,8 +68,31 @@ class ProjectDetailViewModel(private val projectId: String) : ViewModel() {
         sync.update { it.copy(syncing = true, error = null) }
         viewModelScope.launch {
             runCatching { SyncRepository.syncProject(projectId) }
+                .onSuccess { outcome ->
+                    if (outcome.conflicts > 0) {
+                        sync.update {
+                            it.copy(
+                                error =
+                                    "${outcome.conflicts} edit(s) were replaced by newer server changes"
+                            )
+                        }
+                    }
+                }
                 .onFailure { e -> sync.update { it.copy(error = e.message ?: "Sync failed") } }
             sync.update { it.copy(syncing = false) }
         }
+    }
+
+    /** Optimistic - the task shows immediately and syncs when online. */
+    fun addTask(title: String, priority: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            runCatching { SyncRepository.createTask(projectId, title.trim(), priority) }
+                .onFailure { e -> sync.update { it.copy(error = e.message ?: "Couldn't queue the task") } }
+        }
+    }
+
+    fun setStatus(taskId: String, status: String) {
+        viewModelScope.launch { runCatching { SyncRepository.setTaskStatus(taskId, status) } }
     }
 }

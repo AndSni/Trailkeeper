@@ -37,6 +37,8 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE projectId = :projectId ORDER BY title")
     fun observeForProject(projectId: String): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM tasks WHERE id = :id") suspend fun getById(id: String): TaskEntity?
+
     @Query("DELETE FROM tasks WHERE id = :id") suspend fun deleteById(id: String)
 
     @Query("DELETE FROM tasks WHERE projectId = :projectId") suspend fun deleteForProject(projectId: String)
@@ -65,6 +67,17 @@ interface ProjectMemberDao {
 
     @Query("DELETE FROM project_members WHERE projectId = :projectId")
     suspend fun deleteForProject(projectId: String)
+}
+
+@Dao
+interface OutboxDao {
+    @Insert suspend fun insert(row: OutboxEntity)
+
+    @Query("SELECT * FROM outbox ORDER BY createdAt") suspend fun all(): List<OutboxEntity>
+
+    @Query("SELECT COUNT(*) FROM outbox") fun count(): Flow<Int>
+
+    @Query("DELETE FROM outbox WHERE clientOpId = :id") suspend fun deleteById(id: String)
 }
 
 @Dao

@@ -29,4 +29,7 @@ interface TrailkeeperApi {
 
     @GET("sync/changes")
     suspend fun changes(@Query("since") since: Long): SyncChangesDto
+
+    @POST("sync/push")
+    suspend fun push(@Body body: SyncPushRequest): SyncPushResponse
 }

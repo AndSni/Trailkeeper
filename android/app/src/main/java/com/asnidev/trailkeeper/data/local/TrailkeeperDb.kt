@@ -14,8 +14,9 @@ import androidx.room.RoomDatabase
         ProjectMemberEntity::class,
         SyncStateEntity::class,
         ProjectSyncEntity::class,
+        OutboxEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class TrailkeeperDb : RoomDatabase() {
@@ -25,6 +26,7 @@ abstract class TrailkeeperDb : RoomDatabase() {
     abstract fun workLogDao(): WorkLogDao
     abstract fun projectMemberDao(): ProjectMemberDao
     abstract fun syncStateDao(): SyncStateDao
+    abstract fun outboxDao(): OutboxDao
 
     companion object {
         @Volatile private var built: TrailkeeperDb? = null

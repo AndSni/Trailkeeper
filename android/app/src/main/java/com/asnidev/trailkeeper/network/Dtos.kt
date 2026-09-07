@@ -83,6 +83,7 @@ data class TaskDto(
     @SerializedName("estimate_min") val estimateMin: Int?,
     @SerializedName("assignee_ids") val assigneeIds: List<String> = emptyList(),
     val photos: List<TaskPhotoDto> = emptyList(),
+    @SerializedName("updated_at") val updatedAt: String,
 )
 
 data class WorkLogDto(
@@ -95,6 +96,7 @@ data class WorkLogDto(
     @SerializedName("worked_on") val workedOn: String,
     val note: String,
     @SerializedName("auto_from_task") val autoFromTask: Boolean,
+    @SerializedName("updated_at") val updatedAt: String,
 )
 
 data class ProjectMemberDto(
@@ -130,4 +132,32 @@ data class SyncChangesDto(
     val changes: List<SyncChangeDto> = emptyList(),
     @SerializedName("high_seq") val highSeq: Long,
     @SerializedName("has_more") val hasMore: Boolean,
+)
+
+// --- sync (POST /sync/push) --------------------------------------------
+
+data class SyncOpRequest(
+    @SerializedName("client_op_id") val clientOpId: String,
+    @SerializedName("entity_type") val entityType: String,
+    @SerializedName("entity_id") val entityId: String,
+    val op: String,
+    @SerializedName("base_updated_at") val baseUpdatedAt: String?,
+    val fields: JsonElement,
+)
+
+data class SyncPushRequest(val ops: List<SyncOpRequest>)
+
+data class SyncOpResultDto(
+    @SerializedName("client_op_id") val clientOpId: String,
+    @SerializedName("entity_type") val entityType: String,
+    @SerializedName("entity_id") val entityId: String,
+    val status: String, // "applied" | "conflict" | "rejected"
+    @SerializedName("server_seq") val serverSeq: Long?,
+    val row: JsonElement?,
+    val message: String?,
+)
+
+data class SyncPushResponse(
+    val results: List<SyncOpResultDto> = emptyList(),
+    @SerializedName("high_seq") val highSeq: Long,
 )

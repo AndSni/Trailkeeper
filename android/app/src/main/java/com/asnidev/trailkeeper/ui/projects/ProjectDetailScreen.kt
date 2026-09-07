@@ -3,6 +3,8 @@ package com.asnidev.trailkeeper.ui.projects
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,24 +15,32 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,6 +56,8 @@ import com.asnidev.trailkeeper.data.local.TrailEntity
 import com.google.gson.JsonParser
 import kotlin.math.roundToInt
 
+private val PRIORITIES = listOf("low", "medium", "high", "urgent")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Unit) {
@@ -56,6 +68,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
         )
     val s by vm.state.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var showAdd by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -73,11 +86,21 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                 },
             )
         },
+        floatingActionButton = {
+            if (tab == 0) {
+                FloatingActionButton(onClick = { showAdd = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "New task")
+                }
+            }
+        },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (s.syncing) LinearProgressIndicator(Modifier.fillMaxWidth())
             s.error?.let {
-                Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text(
                         it,
                         Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -95,18 +118,28 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
             Box(Modifier.fillMaxSize()) {
                 when {
                     !s.loaded -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                    tab == 0 -> TaskList(s.tasks)
+                    tab == 0 -> TaskList(s.tasks, onSetStatus = vm::setStatus)
                     else -> TrailList(s.trails)
                 }
             }
         }
     }
+
+    if (showAdd) {
+        AddTaskDialog(
+            onDismiss = { showAdd = false },
+            onCreate = { title, priority ->
+                vm.addTask(title, priority)
+                showAdd = false
+            },
+        )
+    }
 }
 
 @Composable
-private fun TaskList(tasks: List<TaskEntity>) {
+private fun TaskList(tasks: List<TaskEntity>, onSetStatus: (String, String) -> Unit) {
     if (tasks.isEmpty()) {
-        EmptyHint("No tasks in this project yet.")
+        EmptyHint("No tasks in this project yet. Tap + to add one.")
         return
     }
     LazyColumn(
@@ -145,6 +178,13 @@ private fun TaskList(tasks: List<TaskEntity>) {
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        if (t.status == "done") {
+                            TextButton(onClick = { onSetStatus(t.id, "open") }) { Text("Reopen") }
+                        } else {
+                            TextButton(onClick = { onSetStatus(t.id, "done") }) { Text("Mark done") }
+                        }
+                    }
                 }
             }
         }
@@ -175,6 +215,45 @@ private fun TrailList(trails: List<TrailEntity>) {
             }
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AddTaskDialog(onDismiss: () -> Unit, onCreate: (String, String) -> Unit) {
+    var title by remember { mutableStateOf("") }
+    var priority by remember { mutableStateOf("medium") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New task") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PRIORITIES.forEach { p ->
+                        FilterChip(
+                            selected = priority == p,
+                            onClick = { priority = p },
+                            label = { Text(p) },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onCreate(title, priority) },
+                enabled = title.isNotBlank(),
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

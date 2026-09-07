@@ -47,6 +47,7 @@ fun TaskDto.toEntity() =
         estimateMin = estimateMin,
         assigneeIdsJson = gson.toJson(assigneeIds),
         photosJson = gson.toJson(photos),
+        updatedAt = updatedAt,
     )
 
 fun WorkLogDto.toEntity() =
@@ -60,6 +61,7 @@ fun WorkLogDto.toEntity() =
         workedOn = workedOn,
         note = note,
         autoFromTask = autoFromTask,
+        updatedAt = updatedAt,
     )
 
 fun ProjectMemberDto.toEntity(projectId: String) =
