@@ -132,6 +132,26 @@ Android Room outbox). This slice is the backend the field app pulls from.
   full bundle for first open; `GET /sync/changes?since=<server_seq>` streams
   everything after that cursor, collapsed to the latest state per entity,
   scoped to what the caller can see, with deletes as `op: "delete"`
+- **Sync push** - `POST /sync/push` applies a batch of offline edits (task /
+  work_log / message, upsert + delete), idempotent per `client_op_id`
+  (`pushed_ops` table), whole-entity last-writer-wins via `base_updated_at`
+
+## What Phase 2 covers (backend)
+
+- **Discussion** - the project's own thread + one per task (`task_id` null vs
+  set). `GET/POST /messages`, `DELETE /messages/{id}` (author or admin).
+  Append-only, soft-deleted. Synced (snapshot, changes, and creatable via
+  `/sync/push`)
+- **@mentions** - `mention_user_ids` on a message, filtered to project
+  members; a mention fires a higher-signal `mention` notification instead of
+  the plain comment one
+- **Notification inbox** - `notifications` table, `GET /notifications`
+  `[?unread]` · `/unread-count` · `POST /notifications/read {ids|all}`.
+  Types wired: `task_assigned` (on assignee add, incl. via push),
+  `task_commented` / `project_commented`, `mention`. Never self-notify
+- **FCM registration** - `device_tokens` + `POST /devices` (idempotent).
+  Actual push dispatch is a stub in `app/notifications.py` until a Firebase
+  project is set up for Trailkeeper
 
 ## Roadmap
 
