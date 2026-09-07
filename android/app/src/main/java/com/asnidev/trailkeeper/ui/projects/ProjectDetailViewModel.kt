@@ -28,6 +28,14 @@ data class ProjectDetailUiState(
 
 private data class SyncStatus(val syncing: Boolean = false, val error: String? = null)
 
+data class MessageRow(
+    val id: String,
+    val authorName: String,
+    val body: String,
+    val createdAt: String,
+    val mine: Boolean,
+)
+
 /**
  * Reads the project's tasks and (org-wide) trails straight from Room, so the
  * screen renders offline from the last sync. [refresh] pulls fresh data via
@@ -36,7 +44,27 @@ private data class SyncStatus(val syncing: Boolean = false, val error: String? =
 class ProjectDetailViewModel(private val projectId: String) : ViewModel() {
     private val db = TrailkeeperDb.db
     private val orgId = Session.currentOrgId()
+    private val myId = Session.currentUserId()
     private val sync = MutableStateFlow(SyncStatus())
+
+    /** The project's own discussion thread, resolved to author names. */
+    val discussion: StateFlow<List<MessageRow>> =
+        combine(
+            db.messageDao().observeThread(projectId, null),
+            db.projectMemberDao().observeForProject(projectId),
+        ) { messages, members ->
+            val names = members.associate { it.userId to it.name }
+            messages.map { m ->
+                MessageRow(
+                    id = m.id,
+                    authorName = names[m.authorId] ?: "Someone",
+                    body = m.body,
+                    createdAt = m.createdAt,
+                    mine = m.authorId != null && m.authorId == myId,
+                )
+            }
+        }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val state: StateFlow<ProjectDetailUiState> =
         combine(
@@ -94,5 +122,14 @@ class ProjectDetailViewModel(private val projectId: String) : ViewModel() {
 
     fun setStatus(taskId: String, status: String) {
         viewModelScope.launch { runCatching { SyncRepository.setTaskStatus(taskId, status) } }
+    }
+
+    fun postMessage(body: String) {
+        val text = body.trim()
+        if (text.isEmpty()) return
+        viewModelScope.launch {
+            runCatching { SyncRepository.postMessage(projectId, taskId = null, body = text) }
+                .onFailure { e -> sync.update { it.copy(error = e.message ?: "Couldn't send") } }
+        }
     }
 }

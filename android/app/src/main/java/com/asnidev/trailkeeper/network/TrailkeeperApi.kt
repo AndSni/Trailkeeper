@@ -32,4 +32,10 @@ interface TrailkeeperApi {
 
     @POST("sync/push")
     suspend fun push(@Body body: SyncPushRequest): SyncPushResponse
+
+    @GET("notifications")
+    suspend fun notifications(@Query("limit") limit: Int = 100): List<NotificationDto>
+
+    @POST("notifications/read")
+    suspend fun markNotificationsRead(@Body body: MarkReadRequest)
 }

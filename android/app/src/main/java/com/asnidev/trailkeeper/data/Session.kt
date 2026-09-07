@@ -55,6 +55,8 @@ object Session {
     fun currentOrgId(): String? =
         (_state.value as? AuthState.LoggedIn)?.me?.memberships?.firstOrNull()?.organisationId
 
+    fun currentUserId(): String? = (_state.value as? AuthState.LoggedIn)?.me?.user?.id
+
     private suspend fun refreshMe() {
         _state.value =
             try {

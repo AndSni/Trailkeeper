@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import com.asnidev.trailkeeper.data.AuthState
 import com.asnidev.trailkeeper.data.Session
 import com.asnidev.trailkeeper.ui.auth.LoginScreen
+import com.asnidev.trailkeeper.ui.notifications.NotificationsScreen
 import com.asnidev.trailkeeper.ui.projects.ProjectDetailScreen
 import com.asnidev.trailkeeper.ui.projects.ProjectListScreen
 
@@ -30,6 +31,7 @@ private val openProjectSaver: Saver<OpenProject?, List<String>> =
 fun TrailkeeperApp() {
     val auth by Session.state.collectAsState()
     var open by rememberSaveable(stateSaver = openProjectSaver) { mutableStateOf<OpenProject?>(null) }
+    var showNotifications by rememberSaveable { mutableStateOf(false) }
 
     when (auth) {
         AuthState.Loading ->
@@ -37,14 +39,19 @@ fun TrailkeeperApp() {
         AuthState.LoggedOut -> LoginScreen()
         is AuthState.LoggedIn -> {
             val current = open
-            if (current == null) {
-                ProjectListScreen(onOpenProject = { id, name -> open = OpenProject(id, name) })
-            } else {
-                ProjectDetailScreen(
-                    projectId = current.id,
-                    projectName = current.name,
-                    onBack = { open = null },
-                )
+            when {
+                showNotifications -> NotificationsScreen(onBack = { showNotifications = false })
+                current != null ->
+                    ProjectDetailScreen(
+                        projectId = current.id,
+                        projectName = current.name,
+                        onBack = { open = null },
+                    )
+                else ->
+                    ProjectListScreen(
+                        onOpenProject = { id, name -> open = OpenProject(id, name) },
+                        onOpenNotifications = { showNotifications = true },
+                    )
             }
         }
     }

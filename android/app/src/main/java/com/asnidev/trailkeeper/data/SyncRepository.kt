@@ -1,6 +1,7 @@
 package com.asnidev.trailkeeper.data
 
 import androidx.room.withTransaction
+import com.asnidev.trailkeeper.data.local.MessageEntity
 import com.asnidev.trailkeeper.data.local.OutboxEntity
 import com.asnidev.trailkeeper.data.local.ProjectSyncEntity
 import com.asnidev.trailkeeper.data.local.SyncStateEntity
@@ -8,6 +9,7 @@ import com.asnidev.trailkeeper.data.local.TaskEntity
 import com.asnidev.trailkeeper.data.local.TrailkeeperDb
 import com.asnidev.trailkeeper.data.local.toEntity
 import com.asnidev.trailkeeper.network.ApiClient
+import com.asnidev.trailkeeper.network.MessageDto
 import com.asnidev.trailkeeper.network.ProjectDto
 import com.asnidev.trailkeeper.network.ProjectMemberDto
 import com.asnidev.trailkeeper.network.SyncChangeDto
@@ -19,9 +21,12 @@ import com.asnidev.trailkeeper.network.WorkLogDto
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.reflect.TypeToken
+import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private fun nowIso(): String = Instant.now().toString()
 
 /**
  * Keeps the Room cache in step with the server (docs/BLUEPRINT.md sec 8).
@@ -95,6 +100,30 @@ object SyncRepository {
         drainOutbox()
     }
 
+    /** Post a comment (project thread when [taskId] is null). Optimistic +
+     * queued through the outbox. */
+    suspend fun postMessage(projectId: String, taskId: String?, body: String) {
+        val id = UUID.randomUUID().toString()
+        db.messageDao().upsert(
+            MessageEntity(
+                id = id,
+                projectId = projectId,
+                taskId = taskId,
+                authorId = Session.currentUserId(),
+                body = body,
+                mentionedUserIdsJson = "[]",
+                createdAt = nowIso(),
+            )
+        )
+        val fields = buildMap<String, Any?> {
+            put("project_id", projectId)
+            if (taskId != null) put("task_id", taskId)
+            put("body", body)
+        }
+        enqueue("message", id, "upsert", baseUpdatedAt = null, fields = fields)
+        drainOutbox()
+    }
+
     private suspend fun enqueue(
         entityType: String,
         entityId: String,
@@ -159,6 +188,9 @@ object SyncRepository {
             "work_log" ->
                 if (row == null) db.workLogDao().deleteById(entityId)
                 else db.workLogDao().upsert(gson.fromJson(row, WorkLogDto::class.java).toEntity())
+            "message" ->
+                if (row == null) db.messageDao().deleteById(entityId)
+                else db.messageDao().upsert(gson.fromJson(row, MessageDto::class.java).toEntity())
         }
     }
 
@@ -175,6 +207,8 @@ object SyncRepository {
             db.taskDao().upsertAll(snap.tasks.map { it.toEntity() })
             db.workLogDao().deleteForProject(projectId)
             db.workLogDao().upsertAll(snap.workLogs.map { it.toEntity() })
+            db.messageDao().deleteForProject(projectId)
+            db.messageDao().upsertAll(snap.messages.map { it.toEntity() })
             db.syncStateDao().markProjectSnapshotted(ProjectSyncEntity(projectId, snap.highSeq))
         }
     }
@@ -215,6 +249,9 @@ object SyncRepository {
                     db.projectMemberDao().upsertAll(members.map { it.toEntity(c.entityId) })
                 }
             }
+            "message" ->
+                if (c.op == "delete" || row == null) db.messageDao().deleteById(c.entityId)
+                else db.messageDao().upsert(gson.fromJson(row, MessageDto::class.java).toEntity())
         }
     }
 

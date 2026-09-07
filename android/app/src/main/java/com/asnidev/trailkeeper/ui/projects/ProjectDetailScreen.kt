@@ -16,9 +16,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
@@ -53,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.asnidev.trailkeeper.ui.map.ProjectMap
@@ -75,6 +80,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
             factory = viewModelFactory { initializer { ProjectDetailViewModel(projectId) } },
         )
     val s by vm.state.collectAsState()
+    val messages by vm.discussion.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showAdd by remember { mutableStateOf(false) }
 
@@ -137,6 +143,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Tasks (${s.tasks.size})") })
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Trails (${s.trails.size})") })
                 Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Map") })
+                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Discussion") })
             }
 
             Box(Modifier.fillMaxSize()) {
@@ -144,13 +151,14 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                     !s.loaded -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                     tab == 0 -> TaskList(s.tasks, onSetStatus = vm::setStatus)
                     tab == 1 -> TrailList(s.trails)
-                    else ->
+                    tab == 2 ->
                         ProjectMap(
                             trails = s.trails,
                             tasks = s.tasks,
                             hasLocationPermission = hasLocation,
                             modifier = Modifier.fillMaxSize(),
                         )
+                    else -> DiscussionTab(messages, onSend = vm::postMessage)
                 }
             }
         }
@@ -324,3 +332,92 @@ private fun plural(n: Int) = if (n == 1) "" else "s"
 
 private fun km(m: Double): String =
     if (m < 950) "${m.roundToInt()} m" else "${(m / 100).roundToInt() / 10.0} km"
+
+@Composable
+private fun DiscussionTab(messages: List<MessageRow>, onSend: (String) -> Unit) {
+    var draft by rememberSaveable { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        if (messages.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(
+                    "No messages yet. Start the conversation.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(messages, key = { it.id }) { m -> MessageBubble(m) }
+            }
+        }
+
+        Surface(tonalElevation = 2.dp) {
+            Row(
+                Modifier.fillMaxWidth().padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Message") },
+                    maxLines = 4,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions =
+                        KeyboardActions(
+                            onSend = {
+                                onSend(draft)
+                                draft = ""
+                            }
+                        ),
+                )
+                IconButton(
+                    onClick = {
+                        onSend(draft)
+                        draft = ""
+                    },
+                    enabled = draft.isNotBlank(),
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageBubble(m: MessageRow) {
+    val bg =
+        if (m.mine) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant
+    Column {
+        Text(
+            "${m.authorName} · ${formatTime(m.createdAt)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Surface(color = bg, shape = RoundedCornerShape(10.dp)) {
+            Text(m.body, Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+        }
+    }
+}
+
+private fun formatTime(iso: String): String =
+    runCatching {
+            java.time.Instant.parse(iso)
+                .atZone(java.time.ZoneId.systemDefault())
+                .format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm"))
+        }
+        .getOrDefault(iso.take(16).replace('T', ' '))

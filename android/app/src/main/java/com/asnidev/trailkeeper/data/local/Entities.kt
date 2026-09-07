@@ -91,6 +91,30 @@ data class ProjectSyncEntity(
     val snapshotHighSeq: Long,
 )
 
+@Entity(tableName = "messages")
+data class MessageEntity(
+    @PrimaryKey val id: String,
+    val projectId: String,
+    val taskId: String?, // null = the project's own thread
+    val authorId: String?,
+    val body: String,
+    val mentionedUserIdsJson: String,
+    val createdAt: String,
+)
+
+@Entity(tableName = "notifications")
+data class NotificationEntity(
+    @PrimaryKey val id: String,
+    val type: String,
+    val subjectType: String,
+    val subjectId: String,
+    val projectId: String?,
+    val actorId: String?,
+    val body: String,
+    val createdAt: String,
+    val readAt: String?,
+)
+
 /**
  * A pending offline write, queued for `POST /sync/push`. Rows are drained
  * before every pull; each carries the fields as a JSON object and the

@@ -106,13 +106,36 @@ data class ProjectMemberDto(
     @SerializedName("project_role") val projectRole: String,
 )
 
+data class MessageDto(
+    val id: String,
+    @SerializedName("project_id") val projectId: String,
+    @SerializedName("task_id") val taskId: String?,
+    @SerializedName("author_id") val authorId: String?,
+    val body: String,
+    @SerializedName("mentioned_user_ids") val mentionedUserIds: List<String> = emptyList(),
+    @SerializedName("created_at") val createdAt: String,
+)
+
 data class SnapshotDto(
     val project: ProjectDto,
     val members: List<ProjectMemberDto> = emptyList(),
     val trails: List<TrailDto> = emptyList(),
     val tasks: List<TaskDto> = emptyList(),
     @SerializedName("work_logs") val workLogs: List<WorkLogDto> = emptyList(),
+    val messages: List<MessageDto> = emptyList(),
     @SerializedName("high_seq") val highSeq: Long,
+)
+
+data class NotificationDto(
+    val id: String,
+    val type: String,
+    @SerializedName("subject_type") val subjectType: String,
+    @SerializedName("subject_id") val subjectId: String,
+    @SerializedName("project_id") val projectId: String?,
+    @SerializedName("actor_id") val actorId: String?,
+    val body: String,
+    @SerializedName("created_at") val createdAt: String,
+    @SerializedName("read_at") val readAt: String?,
 )
 
 // --- sync (GET /sync/changes) --------------------------------------------
@@ -161,3 +184,5 @@ data class SyncPushResponse(
     val results: List<SyncOpResultDto> = emptyList(),
     @SerializedName("high_seq") val highSeq: Long,
 )
+
+data class MarkReadRequest(val ids: List<String> = emptyList(), val all: Boolean = false)

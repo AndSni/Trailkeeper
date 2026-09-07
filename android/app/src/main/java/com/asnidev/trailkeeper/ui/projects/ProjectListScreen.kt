@@ -11,8 +11,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,22 +40,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.asnidev.trailkeeper.data.NotificationRepository
 import com.asnidev.trailkeeper.data.Session
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectListScreen(
     onOpenProject: (id: String, name: String) -> Unit,
+    onOpenNotifications: () -> Unit,
     vm: ProjectListViewModel = viewModel(),
 ) {
     val s by vm.state.collectAsState()
     var showCreate by remember { mutableStateOf(false) }
+    val unread by NotificationRepository.unreadCount().collectAsState(initial = 0)
+
+    LaunchedEffect(Unit) { runCatching { NotificationRepository.refresh() } }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Projects") },
                 actions = {
+                    IconButton(onClick = onOpenNotifications) {
+                        BadgedBox(badge = { if (unread > 0) Badge { Text("$unread") } }) {
+                            Icon(Icons.Default.Notifications, contentDescription = "Notifications")
+                        }
+                    }
                     IconButton(onClick = vm::refresh) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }

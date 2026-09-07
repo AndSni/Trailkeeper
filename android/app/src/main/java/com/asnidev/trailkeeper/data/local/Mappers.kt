@@ -1,5 +1,7 @@
 package com.asnidev.trailkeeper.data.local
 
+import com.asnidev.trailkeeper.network.MessageDto
+import com.asnidev.trailkeeper.network.NotificationDto
 import com.asnidev.trailkeeper.network.ProjectDto
 import com.asnidev.trailkeeper.network.ProjectMemberDto
 import com.asnidev.trailkeeper.network.TaskDto
@@ -71,4 +73,28 @@ fun ProjectMemberDto.toEntity(projectId: String) =
         email = email,
         name = name,
         projectRole = projectRole,
+    )
+
+fun MessageDto.toEntity() =
+    MessageEntity(
+        id = id,
+        projectId = projectId,
+        taskId = taskId,
+        authorId = authorId,
+        body = body,
+        mentionedUserIdsJson = gson.toJson(mentionedUserIds),
+        createdAt = createdAt,
+    )
+
+fun NotificationDto.toEntity() =
+    NotificationEntity(
+        id = id,
+        type = type,
+        subjectType = subjectType,
+        subjectId = subjectId,
+        projectId = projectId,
+        actorId = actorId,
+        body = body,
+        createdAt = createdAt,
+        readAt = readAt,
     )

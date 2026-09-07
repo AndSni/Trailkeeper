@@ -70,6 +70,42 @@ interface ProjectMemberDao {
 }
 
 @Dao
+interface MessageDao {
+    @Upsert suspend fun upsertAll(rows: List<MessageEntity>)
+
+    @Upsert suspend fun upsert(row: MessageEntity)
+
+    @Query(
+        "SELECT * FROM messages WHERE projectId = :projectId AND taskId IS :taskId ORDER BY createdAt"
+    )
+    fun observeThread(projectId: String, taskId: String?): Flow<List<MessageEntity>>
+
+    @Query("DELETE FROM messages WHERE id = :id") suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM messages WHERE projectId = :projectId")
+    suspend fun deleteForProject(projectId: String)
+}
+
+@Dao
+interface NotificationDao {
+    @Upsert suspend fun upsertAll(rows: List<NotificationEntity>)
+
+    @Query("SELECT * FROM notifications ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<NotificationEntity>>
+
+    @Query("SELECT COUNT(*) FROM notifications WHERE readAt IS NULL")
+    fun observeUnreadCount(): Flow<Int>
+
+    @Query("UPDATE notifications SET readAt = :ts WHERE id IN (:ids)")
+    suspend fun markRead(ids: List<String>, ts: String)
+
+    @Query("UPDATE notifications SET readAt = :ts WHERE readAt IS NULL")
+    suspend fun markAllRead(ts: String)
+
+    @Query("DELETE FROM notifications") suspend fun clear()
+}
+
+@Dao
 interface OutboxDao {
     @Insert suspend fun insert(row: OutboxEntity)
 
