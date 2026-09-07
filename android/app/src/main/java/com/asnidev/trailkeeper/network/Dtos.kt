@@ -1,5 +1,6 @@
 package com.asnidev.trailkeeper.network
 
+import com.google.gson.JsonElement
 import com.google.gson.annotations.SerializedName
 
 data class RegisterRequest(
@@ -46,4 +47,65 @@ data class CreateProjectRequest(
     val name: String,
     val description: String = "",
     val activity: String = "mtb",
+)
+
+// --- sync (GET /sync/snapshot) ---------------------------------------------
+
+data class TrailDto(
+    val id: String,
+    val name: String,
+    val activity: String,
+    val difficulty: String,
+    val status: String,
+    val source: String,
+    @SerializedName("length_m") val lengthM: Double,
+    val geometry: JsonElement?, // GeoJSON LineString - parsed by the map layer later
+)
+
+data class TaskPhotoDto(
+    val id: String,
+    val caption: String,
+    val url: String,
+)
+
+data class TaskDto(
+    val id: String,
+    @SerializedName("project_id") val projectId: String,
+    val title: String,
+    val description: String,
+    @SerializedName("task_type") val taskType: String,
+    val priority: String,
+    val status: String,
+    val geometry: JsonElement?, // GeoJSON Point, or null
+    @SerializedName("nearest_trail_id") val nearestTrailId: String?,
+    @SerializedName("estimate_min") val estimateMin: Int?,
+    @SerializedName("assignee_ids") val assigneeIds: List<String> = emptyList(),
+    val photos: List<TaskPhotoDto> = emptyList(),
+)
+
+data class WorkLogDto(
+    val id: String,
+    @SerializedName("task_id") val taskId: String?,
+    @SerializedName("trail_id") val trailId: String?,
+    @SerializedName("user_id") val userId: String,
+    val minutes: Int,
+    @SerializedName("worked_on") val workedOn: String,
+    val note: String,
+    @SerializedName("auto_from_task") val autoFromTask: Boolean,
+)
+
+data class ProjectMemberDto(
+    @SerializedName("user_id") val userId: String,
+    val email: String,
+    val name: String,
+    @SerializedName("project_role") val projectRole: String,
+)
+
+data class SnapshotDto(
+    val project: ProjectDto,
+    val members: List<ProjectMemberDto> = emptyList(),
+    val trails: List<TrailDto> = emptyList(),
+    val tasks: List<TaskDto> = emptyList(),
+    @SerializedName("work_logs") val workLogs: List<WorkLogDto> = emptyList(),
+    @SerializedName("high_seq") val highSeq: Long,
 )

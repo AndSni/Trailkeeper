@@ -23,4 +23,7 @@ interface TrailkeeperApi {
 
     @POST("projects")
     suspend fun createProject(@Body body: CreateProjectRequest): ProjectDto
+
+    @GET("sync/snapshot")
+    suspend fun snapshot(@Query("project") projectId: String): SnapshotDto
 }

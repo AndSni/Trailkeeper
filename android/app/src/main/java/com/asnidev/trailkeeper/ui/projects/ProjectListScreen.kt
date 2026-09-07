@@ -1,5 +1,6 @@
 package com.asnidev.trailkeeper.ui.projects
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +40,10 @@ import com.asnidev.trailkeeper.data.Session
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProjectListScreen(vm: ProjectListViewModel = viewModel()) {
+fun ProjectListScreen(
+    onOpenProject: (id: String, name: String) -> Unit,
+    vm: ProjectListViewModel = viewModel(),
+) {
     val s by vm.state.collectAsState()
     var showCreate by remember { mutableStateOf(false) }
 
@@ -85,7 +89,9 @@ fun ProjectListScreen(vm: ProjectListViewModel = viewModel()) {
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(s.projects, key = { it.id }) { p ->
-                            Card(Modifier.fillMaxWidth()) {
+                            Card(
+                                Modifier.fillMaxWidth().clickable { onOpenProject(p.id, p.name) }
+                            ) {
                                 Column(Modifier.padding(16.dp)) {
                                     Text(p.name, style = MaterialTheme.typography.titleMedium)
                                     Text(

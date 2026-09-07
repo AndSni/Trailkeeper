@@ -88,6 +88,10 @@ match your server.
   access token on a 401 and drops to the login screen if the refresh fails
 - `Session` holds app-wide auth state; Gradle wrapper, theme scaffold and the
   backend-URL probe lifted from SharpRight
+- **Project detail screen** - one `GET /sync/snapshot` call fills Tasks and
+  Trails tabs (priority tag, status, photo/assignee counts; trail length).
+  Still online-only; Room + incremental `GET /sync/changes` + MapLibre are
+  the next slices
 
 ## What Phase 1 covers so far (geography core)
 
