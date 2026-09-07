@@ -299,3 +299,37 @@ class WorkLogOut(BaseModel):
     auto_from_task: bool
     created_at: datetime
     updated_at: datetime
+
+
+# --------------------------------------------------------------------------- #
+# Sync
+# --------------------------------------------------------------------------- #
+
+
+class SyncChangeOut(BaseModel):
+    server_seq: int
+    entity_type: str
+    entity_id: uuid.UUID
+    project_id: uuid.UUID | None
+    op: str  # "upsert" | "delete"
+    changed_at: datetime
+    actor_id: uuid.UUID | None
+    # The entity's current serialized form for an upsert; null for a delete.
+    # Shape depends on entity_type (a TrailOut, TaskOut, WorkLogOut,
+    # ProjectOut, or - for project_member - a list of ProjectMemberOut).
+    row: dict | list | None
+
+
+class SyncChangesOut(BaseModel):
+    changes: list[SyncChangeOut]
+    high_seq: int
+    has_more: bool
+
+
+class SyncSnapshotOut(BaseModel):
+    project: ProjectOut
+    members: list[ProjectMemberOut]
+    trails: list[TrailOut]
+    tasks: list[TaskOut]
+    work_logs: list[WorkLogOut]
+    high_seq: int

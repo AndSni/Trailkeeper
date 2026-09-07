@@ -27,6 +27,7 @@ from app.schemas import (
     ProjectOut,
     ProjectUpdateIn,
 )
+from app.sync import record_change
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -73,6 +74,10 @@ def create_project(
             project_id=project.id, user_id=user.id, project_role=ProjectRole.lead.value
         )
     )
+    record_change(
+        db, entity_type="project", entity_id=project.id, op="upsert",
+        organisation_id=project.organisation_id, project_id=project.id, actor_id=user.id,
+    )
     db.commit()
     db.refresh(project)
     return project
@@ -103,6 +108,10 @@ def update_project(
         project.activity = body.activity
     if body.status is not None:
         project.status = body.status.value
+    record_change(
+        db, entity_type="project", entity_id=project.id, op="upsert",
+        organisation_id=project.organisation_id, project_id=project.id, actor_id=user.id,
+    )
     db.commit()
     db.refresh(project)
     return project
@@ -114,6 +123,10 @@ def delete_project(
 ) -> None:
     project = load_visible_project(project_id, membership, user, db)
     project.deleted_at = datetime.now(UTC)
+    record_change(
+        db, entity_type="project", entity_id=project.id, op="delete",
+        organisation_id=project.organisation_id, project_id=project.id, actor_id=user.id,
+    )
     db.commit()
     return None
 
@@ -175,6 +188,10 @@ def add_project_member(
         db.add(existing)
     else:
         existing.project_role = body.project_role.value
+    record_change(
+        db, entity_type="project_member", entity_id=project.id, op="upsert",
+        organisation_id=project.organisation_id, project_id=project.id, actor_id=user.id,
+    )
     db.commit()
 
     target_user = db.get(User, body.user_id)
@@ -206,5 +223,9 @@ def remove_project_member(
     if pm is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not a project member")
     db.delete(pm)
+    record_change(
+        db, entity_type="project_member", entity_id=project.id, op="upsert",
+        organisation_id=project.organisation_id, project_id=project.id, actor_id=user.id,
+    )
     db.commit()
     return None

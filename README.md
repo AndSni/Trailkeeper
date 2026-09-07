@@ -92,9 +92,9 @@ match your server.
 ## What Phase 1 covers so far (geography core)
 
 Needs **PostGIS** on the database (`CREATE EXTENSION postgis;` - Phase 0 runs
-without it). Not yet built: MapLibre on Android, live GPS, offline tiles, the
-`change_log` sync engine, GPX *recording*. This slice is the backend that
-piece will talk to.
+without it). Not yet built: MapLibre on Android, live GPS, offline tiles, GPX
+*recording*, and the `POST /sync/push` write path (which co-evolves with the
+Android Room outbox). This slice is the backend the field app pulls from.
 
 - **Trails** - org-wide `LineString` geometry, GPX import (`gpxpy`, one Trail
   per track segment), manual create via a point list, GeoJSON out, length
@@ -110,6 +110,11 @@ piece will talk to.
   or an org admin
 - Visibility for all of the above follows the same project-membership rules
   as Phase 0's projects (`app/authz.py`, shared by every route)
+- **Sync pull** - every mutation appends a `change_log` row (`app/sync.py`,
+  an explicit call per route). `GET /sync/snapshot?project=<id>` returns a
+  full bundle for first open; `GET /sync/changes?since=<server_seq>` streams
+  everything after that cursor, collapsed to the latest state per entity,
+  scoped to what the caller can see, with deletes as `op: "delete"`
 
 ## Roadmap
 

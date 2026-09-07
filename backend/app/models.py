@@ -19,15 +19,18 @@ from datetime import UTC, date, datetime
 from geoalchemy2 import Geometry
 from geoalchemy2.elements import WKBElement
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    Uuid,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -357,3 +360,47 @@ class WorkLog(Base, TimestampMixin):
     # True for the log a task's "Mark done" auto-creates from its estimate -
     # distinguishes it from hours entered by hand (see docs/BLUEPRINT.md sec 3).
     auto_from_task: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+# --------------------------------------------------------------------------- #
+# Sync spine (Phase 1b) - see docs/BLUEPRINT.md sec 8.
+#
+# Every mutating route calls app.sync.record_change(), which appends one row
+# here in the same transaction. Offline clients pull `GET /sync/changes?since=
+# <server_seq>` to catch up. `entity_id` / `project_id` carry no FK on
+# purpose: a change row must outlive the row it describes so a delete still
+# propagates.
+# --------------------------------------------------------------------------- #
+
+CHANGE_ENTITY_TYPES = (
+    "project",
+    "project_member",
+    "trail",
+    "task",
+    "work_log",
+)
+
+
+class ChangeLog(Base):
+    __tablename__ = "change_log"
+    __table_args__ = (
+        CheckConstraint("op in ('upsert', 'delete')", name="ck_change_log_op"),
+        Index("ix_change_log_org_seq", "organisation_id", "server_seq"),
+    )
+
+    server_seq: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organisations.id", ondelete="CASCADE"), nullable=False
+    )
+    entity_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    op: Mapped[str] = mapped_column(String(8), nullable=False)
+    # Null for org-wide entities (trails); set for project-scoped ones so a
+    # client only syncing certain projects can filter the stream.
+    project_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
+    )

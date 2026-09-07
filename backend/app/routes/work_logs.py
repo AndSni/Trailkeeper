@@ -16,6 +16,7 @@ from app.db import get_db
 from app.deps import CurrentMembership, CurrentUser
 from app.models import WorkLog
 from app.schemas import WorkLogCreateIn, WorkLogOut, WorkLogUpdateIn
+from app.sync import record_change
 
 router = APIRouter(prefix="/work-logs", tags=["work-logs"])
 
@@ -66,6 +67,11 @@ def create_work_log(
         note=body.note,
     )
     db.add(log)
+    db.flush()
+    record_change(
+        db, entity_type="work_log", entity_id=log.id, op="upsert",
+        organisation_id=log.organisation_id, project_id=log.project_id, actor_id=user.id,
+    )
     db.commit()
     db.refresh(log)
     return log
@@ -90,6 +96,10 @@ def update_work_log(
         log.worked_on = body.worked_on
     if body.note is not None:
         log.note = body.note
+    record_change(
+        db, entity_type="work_log", entity_id=log.id, op="upsert",
+        organisation_id=log.organisation_id, project_id=log.project_id, actor_id=user.id,
+    )
     db.commit()
     db.refresh(log)
     return log
@@ -103,6 +113,10 @@ def delete_work_log(
     require_project_member(log.project_id, membership, user, db)
     if log.user_id != user.id and not _is_admin(membership):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You can only delete your own work log")
+    record_change(
+        db, entity_type="work_log", entity_id=log.id, op="delete",
+        organisation_id=log.organisation_id, project_id=log.project_id, actor_id=user.id,
+    )
     db.delete(log)
     db.commit()
     return None

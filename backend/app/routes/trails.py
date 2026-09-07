@@ -23,6 +23,7 @@ from app.deps import CurrentMembership, CurrentUser, require_org_role
 from app.geo import linestring_wkt, to_geojson
 from app.models import Membership, OrgRole, Trail
 from app.schemas import TrailCreateIn, TrailOut, TrailUpdateIn
+from app.sync import record_change
 
 router = APIRouter(prefix="/trails", tags=["trails"])
 
@@ -55,6 +56,29 @@ def _select_trails(where_clauses: list):
     return select(Trail, geojson, length_m).where(*where_clauses)
 
 
+def fetch_trail_out(db: Session, trail_id: uuid.UUID) -> TrailOut | None:
+    """Serialized trail by id, or None if it's gone or soft-deleted. Used by
+    the routes below (which turn None into 404) and by the sync stream."""
+    row = db.execute(
+        _select_trails([Trail.id == trail_id, Trail.deleted_at.is_(None)])
+    ).first()
+    return _out(*row) if row is not None else None
+
+
+def _get_out(db: Session, trail_id: uuid.UUID) -> TrailOut:
+    out = fetch_trail_out(db, trail_id)
+    if out is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Trail not found")
+    return out
+
+
+def _load(db: Session, trail_id: uuid.UUID, org_id: uuid.UUID) -> Trail:
+    trail = db.get(Trail, trail_id)
+    if trail is None or trail.organisation_id != org_id or trail.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Trail not found")
+    return trail
+
+
 @router.get("", response_model=list[TrailOut])
 def list_trails(membership: CurrentMembership, db: DbSession) -> list[TrailOut]:
     stmt = _select_trails(
@@ -78,6 +102,11 @@ def create_trail(
         created_by_id=user.id,
     )
     db.add(trail)
+    db.flush()
+    record_change(
+        db, entity_type="trail", entity_id=trail.id, op="upsert",
+        organisation_id=trail.organisation_id, actor_id=user.id,
+    )
     db.commit()
     return _get_out(db, trail.id)
 
@@ -121,18 +150,26 @@ async def import_gpx(
 
     if not created:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "GPX file has no track with 2+ points")
+    db.flush()
+    for trail in created:
+        record_change(
+            db, entity_type="trail", entity_id=trail.id, op="upsert",
+            organisation_id=trail.organisation_id, actor_id=user.id,
+        )
     db.commit()
     return [_get_out(db, t.id) for t in created]
 
 
 @router.get("/{trail_id}", response_model=TrailOut)
 def get_trail(trail_id: uuid.UUID, membership: CurrentMembership, db: DbSession) -> TrailOut:
-    return _get_out(db, trail_id, org_id=membership.organisation_id)
+    _load(db, trail_id, membership.organisation_id)
+    return _get_out(db, trail_id)
 
 
 @router.patch("/{trail_id}", response_model=TrailOut)
 def update_trail(
-    trail_id: uuid.UUID, body: TrailUpdateIn, membership: AdminMembership, db: DbSession
+    trail_id: uuid.UUID, body: TrailUpdateIn, membership: AdminMembership,
+    user: CurrentUser, db: DbSession,
 ) -> TrailOut:
     trail = _load(db, trail_id, membership.organisation_id)
     if body.name is not None:
@@ -141,31 +178,23 @@ def update_trail(
         trail.difficulty = body.difficulty
     if body.status is not None:
         trail.status = body.status.value
+    record_change(
+        db, entity_type="trail", entity_id=trail.id, op="upsert",
+        organisation_id=trail.organisation_id, actor_id=user.id,
+    )
     db.commit()
     return _get_out(db, trail.id)
 
 
 @router.delete("/{trail_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_trail(trail_id: uuid.UUID, membership: AdminMembership, db: DbSession) -> None:
+def delete_trail(
+    trail_id: uuid.UUID, membership: AdminMembership, user: CurrentUser, db: DbSession
+) -> None:
     trail = _load(db, trail_id, membership.organisation_id)
     trail.deleted_at = datetime.now(UTC)
+    record_change(
+        db, entity_type="trail", entity_id=trail.id, op="delete",
+        organisation_id=trail.organisation_id, actor_id=user.id,
+    )
     db.commit()
     return None
-
-
-def _load(db: Session, trail_id: uuid.UUID, org_id: uuid.UUID) -> Trail:
-    trail = db.get(Trail, trail_id)
-    if trail is None or trail.organisation_id != org_id or trail.deleted_at is not None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Trail not found")
-    return trail
-
-
-def _get_out(db: Session, trail_id: uuid.UUID, org_id: uuid.UUID | None = None) -> TrailOut:
-    where = [Trail.id == trail_id, Trail.deleted_at.is_(None)]
-    if org_id is not None:
-        where.append(Trail.organisation_id == org_id)
-    row = db.execute(_select_trails(where)).first()
-    if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Trail not found")
-    trail, geojson, length_m = row
-    return _out(trail, geojson, length_m)

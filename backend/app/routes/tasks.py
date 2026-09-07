@@ -35,10 +35,25 @@ from app.schemas import (
     TaskPhotoOut,
     TaskUpdateIn,
 )
+from app.sync import record_change
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 DbSession = Annotated[Session, Depends(get_db)]
+
+
+def _record_task_change(db: Session, task: Task, op: str, actor_id: uuid.UUID) -> None:
+    """A task's assignees, photos and work log all ride on the task's own
+    change row - clients re-fetch the whole task anyway."""
+    record_change(
+        db,
+        entity_type="task",
+        entity_id=task.id,
+        op=op,
+        organisation_id=task.organisation_id,
+        project_id=task.project_id,
+        actor_id=actor_id,
+    )
 
 
 def _select_tasks(where_clauses: list):
@@ -84,12 +99,18 @@ def _task_out(db: Session, task: Task, geojson: str | None) -> TaskOut:
     )
 
 
-def _get_out(db: Session, task_id: uuid.UUID) -> TaskOut:
+def fetch_task_out(db: Session, task_id: uuid.UUID) -> TaskOut | None:
+    """Serialized task by id, or None if gone / soft-deleted. Used by the
+    routes (which turn None into 404) and by the sync stream."""
     row = db.execute(_select_tasks([Task.id == task_id, Task.deleted_at.is_(None)])).first()
-    if row is None:
+    return _task_out(db, row[0], row[1]) if row is not None else None
+
+
+def _get_out(db: Session, task_id: uuid.UUID) -> TaskOut:
+    out = fetch_task_out(db, task_id)
+    if out is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
-    task, geojson = row
-    return _task_out(db, task, geojson)
+    return out
 
 
 def _load_visible_task(
@@ -162,6 +183,7 @@ def create_task(
     db.flush()
     if body.assignee_ids:
         _set_assignees(db, task.id, body.assignee_ids)
+    _record_task_change(db, task, "upsert", user.id)
     db.commit()
     return _get_out(db, task.id)
 
@@ -203,6 +225,7 @@ def update_task(
         )
         task.nearest_trail_id = nearest[0] if nearest is not None else None
 
+    _record_task_change(db, task, "upsert", user.id)
     db.commit()
     return _get_out(db, task.id)
 
@@ -213,6 +236,7 @@ def delete_task(
 ) -> None:
     task, _project = _load_visible_task(db, task_id, membership, user)
     task.deleted_at = datetime.now(UTC)
+    _record_task_change(db, task, "delete", user.id)
     db.commit()
     return None
 
@@ -227,6 +251,7 @@ def set_assignees(
 ) -> TaskOut:
     task, _project = _load_visible_task(db, task_id, membership, user)
     _set_assignees(db, task.id, body.user_ids)
+    _record_task_change(db, task, "upsert", user.id)
     db.commit()
     return _get_out(db, task.id)
 
@@ -247,18 +272,23 @@ def complete_task(
     task.status = TaskStatus.done.value
     minutes = body.minutes if body.minutes is not None else task.estimate_min
     if minutes:
-        db.add(
-            WorkLog(
-                organisation_id=project.organisation_id,
-                project_id=project.id,
-                task_id=task.id,
-                user_id=user.id,
-                minutes=minutes,
-                worked_on=date.today(),
-                note="Auto-logged on task completion",
-                auto_from_task=True,
-            )
+        log = WorkLog(
+            organisation_id=project.organisation_id,
+            project_id=project.id,
+            task_id=task.id,
+            user_id=user.id,
+            minutes=minutes,
+            worked_on=date.today(),
+            note="Auto-logged on task completion",
+            auto_from_task=True,
         )
+        db.add(log)
+        db.flush()
+        record_change(
+            db, entity_type="work_log", entity_id=log.id, op="upsert",
+            organisation_id=project.organisation_id, project_id=project.id, actor_id=user.id,
+        )
+    _record_task_change(db, task, "upsert", user.id)
     db.commit()
     return _get_out(db, task.id)
 
@@ -307,6 +337,7 @@ async def upload_photo(
         task_id=task.id, storage_path=relative_path, caption=caption, uploaded_by_id=user.id
     )
     db.add(photo)
+    _record_task_change(db, task, "upsert", user.id)
     db.commit()
     db.refresh(photo)
     return _photo_out(photo)
@@ -344,6 +375,7 @@ def delete_photo(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo not found")
     full_path = Path(settings.upload_dir) / photo.storage_path
     db.delete(photo)
+    _record_task_change(db, task, "upsert", user.id)
     db.commit()
     full_path.unlink(missing_ok=True)
     return None
