@@ -104,7 +104,12 @@ match your server.
   line layers and tasks as point layers fed from Room, camera auto-fits to
   the data, live-GPS puck via the location component. Base map is
   OpenFreeMap's free hosted "liberty" style; a self-hosted `.pmtiles` for
-  true offline use is the next slice (BLUEPRINT §9).
+  true offline use is a later slice (BLUEPRINT §9).
+- **Discussion tab + notifications** - the project's comment thread renders
+  from Room (`MessageEntity`), posting goes through the outbox. A bell icon
+  on the project list shows an unread badge and opens the notification inbox
+  (`NotificationRepository` polls `GET /notifications`, mark-read syncs both
+  ways). @mention picker is not built yet - mentions are backend-ready.
 
 ## What Phase 1 covers so far (geography core)
 
