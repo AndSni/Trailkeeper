@@ -19,6 +19,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -30,7 +31,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,8 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.asnidev.trailkeeper.network.TaskDto
-import com.asnidev.trailkeeper.network.TrailDto
+import com.asnidev.trailkeeper.data.local.TaskEntity
+import com.asnidev.trailkeeper.data.local.TrailEntity
+import com.google.gson.JsonParser
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,33 +67,36 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                     }
                 },
                 actions = {
-                    IconButton(onClick = vm::refresh) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    IconButton(onClick = vm::refresh, enabled = !s.syncing) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Sync")
                     }
                 },
             )
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            val tasks = s.snapshot?.tasks.orEmpty()
-            val trails = s.snapshot?.trails.orEmpty()
+            if (s.syncing) LinearProgressIndicator(Modifier.fillMaxWidth())
+            s.error?.let {
+                Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        it,
+                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+
             TabRow(selectedTabIndex = tab) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Tasks (${tasks.size})") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Trails (${trails.size})") })
+                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Tasks (${s.tasks.size})") })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Trails (${s.trails.size})") })
             }
 
             Box(Modifier.fillMaxSize()) {
                 when {
-                    s.loading && s.snapshot == null ->
-                        CircularProgressIndicator(Modifier.align(Alignment.Center))
-                    s.error != null && s.snapshot == null ->
-                        Text(
-                            s.error!!,
-                            Modifier.align(Alignment.Center).padding(32.dp),
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    tab == 0 -> TaskList(tasks)
-                    else -> TrailList(trails)
+                    !s.loaded -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    tab == 0 -> TaskList(s.tasks)
+                    else -> TrailList(s.trails)
                 }
             }
         }
@@ -100,7 +104,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
 }
 
 @Composable
-private fun TaskList(tasks: List<TaskDto>) {
+private fun TaskList(tasks: List<TaskEntity>) {
     if (tasks.isEmpty()) {
         EmptyHint("No tasks in this project yet.")
         return
@@ -111,6 +115,8 @@ private fun TaskList(tasks: List<TaskDto>) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         items(tasks, key = { it.id }) { t ->
+            val photos = jsonArraySize(t.photosJson)
+            val assignees = jsonArraySize(t.assigneeIdsJson)
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -125,10 +131,8 @@ private fun TaskList(tasks: List<TaskDto>) {
                         buildString {
                             append(t.status.replace('_', ' '))
                             if (t.taskType.isNotBlank()) append(" · ${t.taskType}")
-                            if (t.photos.isNotEmpty()) append(" · ${t.photos.size} photo${plural(t.photos.size)}")
-                            if (t.assigneeIds.isNotEmpty()) {
-                                append(" · ${t.assigneeIds.size} assignee${plural(t.assigneeIds.size)}")
-                            }
+                            if (photos > 0) append(" · $photos photo${plural(photos)}")
+                            if (assignees > 0) append(" · $assignees assignee${plural(assignees)}")
                         },
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -148,7 +152,7 @@ private fun TaskList(tasks: List<TaskDto>) {
 }
 
 @Composable
-private fun TrailList(trails: List<TrailDto>) {
+private fun TrailList(trails: List<TrailEntity>) {
     if (trails.isEmpty()) {
         EmptyHint("No trails imported yet.")
         return
@@ -195,9 +199,16 @@ private fun PriorityTag(priority: String) {
 @Composable
 private fun EmptyHint(text: String) {
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
+
+private fun jsonArraySize(json: String): Int =
+    runCatching { JsonParser.parseString(json).asJsonArray.size() }.getOrDefault(0)
 
 private fun plural(n: Int) = if (n == 1) "" else "s"
 

@@ -53,6 +53,7 @@ data class CreateProjectRequest(
 
 data class TrailDto(
     val id: String,
+    @SerializedName("organisation_id") val organisationId: String,
     val name: String,
     val activity: String,
     val difficulty: String,
@@ -70,6 +71,7 @@ data class TaskPhotoDto(
 
 data class TaskDto(
     val id: String,
+    @SerializedName("organisation_id") val organisationId: String,
     @SerializedName("project_id") val projectId: String,
     val title: String,
     val description: String,
@@ -85,6 +87,7 @@ data class TaskDto(
 
 data class WorkLogDto(
     val id: String,
+    @SerializedName("project_id") val projectId: String,
     @SerializedName("task_id") val taskId: String?,
     @SerializedName("trail_id") val trailId: String?,
     @SerializedName("user_id") val userId: String,
@@ -108,4 +111,23 @@ data class SnapshotDto(
     val tasks: List<TaskDto> = emptyList(),
     @SerializedName("work_logs") val workLogs: List<WorkLogDto> = emptyList(),
     @SerializedName("high_seq") val highSeq: Long,
+)
+
+// --- sync (GET /sync/changes) --------------------------------------------
+
+data class SyncChangeDto(
+    @SerializedName("server_seq") val serverSeq: Long,
+    @SerializedName("entity_type") val entityType: String,
+    @SerializedName("entity_id") val entityId: String,
+    @SerializedName("project_id") val projectId: String?,
+    val op: String, // "upsert" | "delete"
+    // Shape depends on entityType: TrailDto / TaskDto / WorkLogDto /
+    // ProjectDto, or (project_member) a JSON array of ProjectMemberDto.
+    val row: JsonElement?,
+)
+
+data class SyncChangesDto(
+    val changes: List<SyncChangeDto> = emptyList(),
+    @SerializedName("high_seq") val highSeq: Long,
+    @SerializedName("has_more") val hasMore: Boolean,
 )

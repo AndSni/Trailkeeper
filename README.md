@@ -88,10 +88,13 @@ match your server.
   access token on a 401 and drops to the login screen if the refresh fails
 - `Session` holds app-wide auth state; Gradle wrapper, theme scaffold and the
   backend-URL probe lifted from SharpRight
-- **Project detail screen** - one `GET /sync/snapshot` call fills Tasks and
-  Trails tabs (priority tag, status, photo/assignee counts; trail length).
-  Still online-only; Room + incremental `GET /sync/changes` + MapLibre are
-  the next slices
+- **Offline-first project screen** - Room (`data/local/`) is a rebuildable
+  cache of the synced entities. `SyncRepository` seeds a project once from
+  `GET /sync/snapshot`, then every open runs the org-wide incremental loop
+  `GET /sync/changes?since=<cursor>` (paged, deletes handled, cursor in
+  `sync_state`). The detail screen renders straight from Room `Flow`s, so it
+  shows the last sync offline and refreshes in place. Sign-out wipes the
+  cache. MapLibre map + the write outbox (`POST /sync/push`) are next.
 
 ## What Phase 1 covers so far (geography core)
 

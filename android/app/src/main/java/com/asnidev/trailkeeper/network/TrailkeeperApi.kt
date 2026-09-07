@@ -26,4 +26,7 @@ interface TrailkeeperApi {
 
     @GET("sync/snapshot")
     suspend fun snapshot(@Query("project") projectId: String): SnapshotDto
+
+    @GET("sync/changes")
+    suspend fun changes(@Query("since") since: Long): SyncChangesDto
 }

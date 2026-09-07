@@ -3,6 +3,7 @@ package com.asnidev.trailkeeper.data
 import com.asnidev.trailkeeper.network.ApiClient
 import com.asnidev.trailkeeper.network.MeResponse
 import com.asnidev.trailkeeper.network.onAuthLost
+// SyncRepository is in the same package (com.asnidev.trailkeeper.data)
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 sealed interface AuthState {
     data object Loading : AuthState
@@ -44,18 +46,27 @@ object Session {
     fun signOut() {
         scope.launch {
             TokenStore.clear()
+            runCatching { SyncRepository.clear() } // next account starts with a clean cache
             _state.value = AuthState.LoggedOut
         }
     }
+
+    /** The org this session acts on (single-org for now). Null when logged out. */
+    fun currentOrgId(): String? =
+        (_state.value as? AuthState.LoggedIn)?.me?.memberships?.firstOrNull()?.organisationId
 
     private suspend fun refreshMe() {
         _state.value =
             try {
                 AuthState.LoggedIn(ApiClient.api().me())
+            } catch (e: HttpException) {
+                // A real auth failure (401/403) - the token is dead, drop it.
+                if (e.code() in 401..403) TokenStore.clear()
+                AuthState.LoggedOut
             } catch (_: Exception) {
-                // Token invalid / server unreachable at startup - treat as
-                // logged out; the login screen surfaces any real error.
-                TokenStore.clear()
+                // Network error at startup - keep the token so a later launch
+                // with connectivity works. (Full offline login needs a cached
+                // /auth/me; that's a later slice.)
                 AuthState.LoggedOut
             }
     }

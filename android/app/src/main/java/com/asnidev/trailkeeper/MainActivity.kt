@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.asnidev.trailkeeper.data.Session
 import com.asnidev.trailkeeper.data.TokenStore
+import com.asnidev.trailkeeper.data.local.TrailkeeperDb
 import com.asnidev.trailkeeper.ui.theme.TrailkeeperTheme
 
 class MainActivity : ComponentActivity() {
@@ -13,6 +14,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         TokenStore.init(applicationContext)
+        TrailkeeperDb.init(applicationContext)
         Session.start()
 
         setContent {
