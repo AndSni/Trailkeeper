@@ -28,6 +28,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -380,6 +381,8 @@ CHANGE_ENTITY_TYPES = (
     "task",
     "work_log",
     "message",
+    "job_type",
+    "segment_work",
 )
 
 
@@ -514,3 +517,96 @@ class DeviceToken(Base):
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
     )
+
+
+# --------------------------------------------------------------------------- #
+# Segment timing (Phase 4) - the feature nothing off-the-shelf offers.
+# See docs/BLUEPRINT.md sec 10.
+#
+# A JobType defines how a kind of work is measured (its `unit`) and, optionally,
+# an `expected_rate` in minutes-per-unit to compare against. A
+# SegmentWorkRecord is one timed piece of that work: a geometry (line / area /
+# point), a measured or hand-entered quantity, and the active (un-paused)
+# seconds it took. Rates, throughput and person-hours are DERIVED in queries,
+# never stored.
+# --------------------------------------------------------------------------- #
+
+JOB_UNITS = ("hours", "km", "m2", "count")
+_JOB_UNITS_SQL = ", ".join(f"'{u}'" for u in JOB_UNITS)
+
+# key, label, unit, default_crew, expected_rate (min per unit or None), colour, group
+DEFAULT_JOB_TYPES = (
+    ("brushcutting", "Brushcutting", "km", 2, 22.0, "#4C6B3C", "Vegetation"),
+    ("hand_clearing", "Hand clearing", "km", 2, 40.0, "#4C6B3C", "Vegetation"),
+    ("tread_repair", "Tread repair", "m2", 2, None, "#8A6A4A", "Tread"),
+    ("blowdown_clearing", "Blowdown clearing", "count", 2, 12.0, "#8A6A4A", "Tread"),
+    ("drainage_dip", "Drainage dip", "count", 1, 6.0, "#2F5A6B", "Drainage"),
+    ("waterbar", "Waterbar", "count", 2, 25.0, "#2F5A6B", "Drainage"),
+    ("signage", "Signage", "count", 1, None, "#B7791F", "Furniture"),
+    ("general", "General trail work", "hours", 1, None, "#5C6450", "Other"),
+)
+
+
+class JobType(Base, TimestampMixin):
+    __tablename__ = "job_types"
+    __table_args__ = (
+        UniqueConstraint("organisation_id", "activity", "key", name="uq_job_type_key"),
+        CheckConstraint(f"unit in ({_JOB_UNITS_SQL})", name="ck_job_type_unit"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organisations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    activity: Mapped[str] = mapped_column(String(64), default="mtb", nullable=False)
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    unit: Mapped[str] = mapped_column(String(8), nullable=False)
+    default_crew: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Target minutes per unit (min/km, min each, ...). Null = no target set.
+    expected_rate: Mapped[float | None] = mapped_column(Numeric(10, 3), nullable=True)
+    color: Mapped[str] = mapped_column(String(16), default="", nullable=False)
+    sort_group: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SegmentWorkRecord(Base, TimestampMixin):
+    __tablename__ = "segment_work_records"
+    __table_args__ = (
+        CheckConstraint(
+            "quantity_source in ('measured', 'manual')", name="ck_swr_quantity_source"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organisations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    job_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("job_types.id", ondelete="SET NULL"), nullable=True
+    )
+    trail_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("trails.id", ondelete="SET NULL"), nullable=True
+    )
+    # LineString | Polygon | Point, 4326. Optional (a count job may have none).
+    geom: Mapped[WKBElement | None] = mapped_column(
+        Geometry(geometry_type="GEOMETRY", srid=4326), nullable=True
+    )
+    quantity: Mapped[float] = mapped_column(Numeric(12, 3), default=0, nullable=False)
+    unit: Mapped[str] = mapped_column(String(8), nullable=False)
+    quantity_source: Mapped[str] = mapped_column(String(8), default="manual", nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Wall time minus pauses - the number rates are computed against.
+    active_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pauses: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    crew_size: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    equipment: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

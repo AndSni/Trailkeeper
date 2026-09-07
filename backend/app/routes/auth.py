@@ -15,7 +15,15 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.deps import CurrentUser
-from app.models import Invite, Membership, Organisation, OrgRole, User
+from app.models import (
+    DEFAULT_JOB_TYPES,
+    Invite,
+    JobType,
+    Membership,
+    Organisation,
+    OrgRole,
+    User,
+)
 from app.schemas import (
     AcceptInviteIn,
     LoginIn,
@@ -67,6 +75,20 @@ def register(body: RegisterIn, db: DbSession) -> TokenPair:
     db.add_all([org, user])
     db.flush()
     db.add(Membership(organisation_id=org.id, user_id=user.id, org_role=OrgRole.owner.value))
+    for key, label, unit, crew, rate, color, group in DEFAULT_JOB_TYPES:
+        db.add(
+            JobType(
+                organisation_id=org.id,
+                activity="mtb",
+                key=key,
+                label=label,
+                unit=unit,
+                default_crew=crew,
+                expected_rate=rate,
+                color=color,
+                sort_group=group,
+            )
+        )
     db.commit()
     return _tokens(user.id)
 

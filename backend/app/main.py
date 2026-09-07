@@ -6,10 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routes import (
     auth,
+    job_types,
     messages,
     notifications,
     org,
     projects,
+    segment_work,
     sync,
     tasks,
     trails,
@@ -43,6 +45,8 @@ app.include_router(tasks.router)
 app.include_router(work_logs.router)
 app.include_router(messages.router)
 app.include_router(notifications.router)
+app.include_router(job_types.router)
+app.include_router(segment_work.router)
 app.include_router(sync.router)
 
 

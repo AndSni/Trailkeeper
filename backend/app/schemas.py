@@ -326,6 +326,123 @@ class MessageOut(BaseModel):
     created_at: datetime
 
 
+
+# --------------------------------------------------------------------------- #
+# Segment timing (Phase 4)
+# --------------------------------------------------------------------------- #
+
+
+class JobTypeCreateIn(BaseModel):
+    activity: str = Field(default="mtb", max_length=64)
+    key: str = Field(min_length=1, max_length=64)
+    label: str = Field(min_length=1, max_length=120)
+    unit: str  # hours | km | m2 | count
+    default_crew: int = Field(default=1, ge=1)
+    expected_rate: float | None = Field(default=None, ge=0)  # minutes per unit
+    color: str = Field(default="", max_length=16)
+    sort_group: str = Field(default="", max_length=64)
+
+
+class JobTypeUpdateIn(BaseModel):
+    label: str | None = Field(default=None, min_length=1, max_length=120)
+    unit: str | None = None
+    default_crew: int | None = Field(default=None, ge=1)
+    expected_rate: float | None = Field(default=None, ge=0)
+    color: str | None = Field(default=None, max_length=16)
+    sort_group: str | None = Field(default=None, max_length=64)
+
+
+class JobTypeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organisation_id: uuid.UUID
+    activity: str
+    key: str
+    label: str
+    unit: str
+    default_crew: int
+    expected_rate: float | None
+    color: str
+    sort_group: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SegmentWorkCreateIn(BaseModel):
+    project_id: uuid.UUID
+    job_type_id: uuid.UUID
+    trail_id: uuid.UUID | None = None
+    geometry: dict | None = None  # GeoJSON geometry (LineString / Polygon / Point)
+    quantity: float | None = Field(default=None, ge=0)
+    quantity_source: str = "manual"  # measured | manual
+    started_at: datetime
+    ended_at: datetime | None = None
+    active_seconds: int = Field(default=0, ge=0)
+    pauses: list = Field(default_factory=list)
+    crew_size: int = Field(default=1, ge=1)
+    equipment: list[str] = Field(default_factory=list)
+    notes: str = Field(default="", max_length=4000)
+
+
+class SegmentWorkUpdateIn(BaseModel):
+    job_type_id: uuid.UUID | None = None
+    trail_id: uuid.UUID | None = None
+    geometry: dict | None = None
+    quantity: float | None = Field(default=None, ge=0)
+    quantity_source: str | None = None
+    ended_at: datetime | None = None
+    active_seconds: int | None = Field(default=None, ge=0)
+    pauses: list | None = None
+    crew_size: int | None = Field(default=None, ge=1)
+    equipment: list[str] | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class SegmentWorkOut(BaseModel):
+    id: uuid.UUID
+    organisation_id: uuid.UUID
+    project_id: uuid.UUID
+    job_type_id: uuid.UUID | None
+    trail_id: uuid.UUID | None
+    geometry: dict | None
+    quantity: float
+    unit: str
+    quantity_source: str
+    started_at: datetime
+    ended_at: datetime | None
+    active_seconds: int
+    pauses: list
+    crew_size: int
+    equipment: list[str]
+    notes: str
+    created_by_id: uuid.UUID | None
+    # Derived - never stored (docs/BLUEPRINT.md sec 10).
+    person_hours: float
+    rate_min_per_unit: float | None
+    throughput_per_hour: float | None
+    vs_expected_min_per_unit: float | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SegmentRollupGroup(BaseModel):
+    group_key: str
+    group_label: str
+    record_count: int
+    unit: str
+    total_quantity: float
+    total_person_hours: float
+    mean_rate_min_per_unit: float | None  # weighted: total minutes / total quantity
+    expected_rate: float | None
+    delta_min_per_unit: float | None
+
+
+class SegmentRollupOut(BaseModel):
+    group_by: str
+    groups: list[SegmentRollupGroup]
+
+
 # --------------------------------------------------------------------------- #
 # Sync
 # --------------------------------------------------------------------------- #
@@ -358,6 +475,8 @@ class SyncSnapshotOut(BaseModel):
     tasks: list[TaskOut]
     work_logs: list[WorkLogOut]
     messages: list[MessageOut] = []
+    job_types: list[JobTypeOut] = []
+    segment_work: list[SegmentWorkOut] = []
     high_seq: int
 
 

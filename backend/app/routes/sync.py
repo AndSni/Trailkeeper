@@ -22,17 +22,21 @@ from app.db import get_db
 from app.deps import CurrentMembership, CurrentUser
 from app.models import (
     ChangeLog,
+    JobType,
     Message,
     Project,
     ProjectMember,
+    SegmentWorkRecord,
     Task,
     Trail,
     User,
     WorkLog,
 )
+from app.routes.segment_work import fetch_segment_out
 from app.routes.tasks import fetch_task_out
 from app.routes.trails import fetch_trail_out
 from app.schemas import (
+    JobTypeOut,
     MessageOut,
     ProjectMemberOut,
     ProjectOut,
@@ -93,6 +97,11 @@ def _serialize_entity(db: Session, entity_type: str, entity_id: uuid.UUID) -> di
     elif entity_type == "message":
         msg = db.get(Message, entity_id)
         out = None if msg is None or msg.deleted_at is not None else MessageOut.model_validate(msg)
+    elif entity_type == "job_type":
+        jt = db.get(JobType, entity_id)
+        out = None if jt is None or jt.deleted_at is not None else JobTypeOut.model_validate(jt)
+    elif entity_type == "segment_work":
+        out = fetch_segment_out(db, entity_id)
     elif entity_type == "project":
         project = db.get(Project, entity_id)
         gone = project is None or project.deleted_at is not None
@@ -191,6 +200,16 @@ def get_snapshot(
         .where(Message.project_id == proj.id, Message.deleted_at.is_(None))
         .order_by(Message.created_at)
     )
+    job_types = db.scalars(
+        select(JobType).where(
+            JobType.organisation_id == membership.organisation_id, JobType.deleted_at.is_(None)
+        )
+    )
+    segment_rows = db.scalars(
+        select(SegmentWorkRecord.id).where(
+            SegmentWorkRecord.project_id == proj.id, SegmentWorkRecord.deleted_at.is_(None)
+        )
+    )
 
     high_seq = db.scalar(
         select(func.coalesce(func.max(ChangeLog.server_seq), 0)).where(
@@ -205,5 +224,7 @@ def get_snapshot(
         tasks=[t for tid in task_rows if (t := fetch_task_out(db, tid)) is not None],
         work_logs=[WorkLogOut.model_validate(w) for w in work_logs],
         messages=[MessageOut.model_validate(m) for m in msgs],
+        job_types=[JobTypeOut.model_validate(j) for j in job_types],
+        segment_work=[s for sid in segment_rows if (s := fetch_segment_out(db, sid)) is not None],
         high_seq=high_seq or 0,
     )
