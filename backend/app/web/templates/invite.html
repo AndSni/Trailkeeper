@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Accept invite · Trailkeeper{% endblock %}
+{% block body %}
+<div class="auth">
+  <h1>Trailkeeper</h1>
+  <div class="card">
+    {% if not valid %}
+      <h2>Invite not valid</h2>
+      <p class="muted">This invite link has expired or has already been used.
+      Ask an admin to send a new one.</p>
+      <a class="btn" href="/login">Go to sign in</a>
+    {% else %}
+      <h2>Join {{ org_name or "the organisation" }}</h2>
+      {% if email %}<p class="muted">Invited as <strong>{{ email }}</strong></p>{% endif %}
+      {% if error %}<div class="error">{{ error }}</div>{% endif %}
+      <form method="post" action="/invite/{{ token }}">
+        <label for="name">Your name</label>
+        <input id="name" name="name" required autofocus>
+        <label for="password">Choose a password <span class="muted">(8+ characters)</span></label>
+        <input id="password" name="password" type="password" autocomplete="new-password" required minlength="8">
+        <button type="submit">Accept invite</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

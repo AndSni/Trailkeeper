@@ -229,6 +229,27 @@ The feature nothing off-the-shelf has (`docs/BLUEPRINT.md` §10).
 - Structures / forms / inspections ride the sync snapshot + changes stream;
   Room bumped to v5
 
+## What Phase 6 covers so far - web console (auth + dashboard)
+
+Server-rendered from the same FastAPI app (Jinja2, no JS build), served at the
+same domain. The browser session is the refresh-token JWT in an HttpOnly
+`tk_session` cookie; console routes read the DB directly.
+
+- **`/register`** - create an organisation and its first owner (honours
+  `ALLOW_REGISTRATION`). **`/login`**, **`/logout`**. **`/invite/<token>`** -
+  accept an invite (name + password). All reuse the exact `app.routes.auth`
+  handlers
+- **`/app`** - read-only dashboard: member / project / structure counts, a
+  projects table, and per selected project (`?project=<id>`): tasks by status,
+  hours per member (work logs + timed segments), the job-type productivity
+  table (Σ quantity / person-hours / mean rate / Δ vs target), structures by
+  status, recent inspections with risk
+- **`/app/members`** (admin+) - people and roles, pending invites, and a form
+  that mints a new invite link
+- Not yet: cached aggregates, CSV / XLSX / PDF / photo-zip exports, the React
+  + MapLibre GL JS map console (`docs/BLUEPRINT.md` sec 11). Console-form CSRF
+  protection currently relies on the `SameSite=Lax` session cookie
+
 ## Roadmap
 
 `P1` map + offline tiles + live GPS + GPX import + tasks + sync ·

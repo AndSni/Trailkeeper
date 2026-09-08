@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{{ org_name }} · Trailkeeper{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block body %}
+<main>
+  <h1>{{ org_name }}</h1>
+
+  <div class="grid">
+    <div class="stat"><div class="n">{{ member_count }}</div><div class="k">Members</div></div>
+    <div class="stat"><div class="n">{{ projects|length }}</div><div class="k">Projects</div></div>
+    <div class="stat">
+      <div class="n">{{ structure_status.values()|sum }}</div><div class="k">Structures</div>
+    </div>
+    <div class="stat">
+      <div class="n">{{ (hours_per_member|sum(attribute='total_hours'))|round(1) }}</div>
+      <div class="k">Hours (selected project)</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h2>Projects</h2>
+    <table>
+      <tr><th>Name</th><th>Status</th><th class="num">Open</th><th class="num">Done</th><th class="num">Members</th></tr>
+      {% for p in projects %}
+      <tr>
+        <td><a href="/app?project={{ p.id }}">{{ p.name }}</a></td>
+        <td><span class="pill">{{ p.status }}</span></td>
+        <td class="num">{{ p.open }}</td>
+        <td class="num">{{ p.done }}</td>
+        <td class="num">{{ p.members }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No projects yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  {% if selected %}
+  <h2 style="margin-top:24px">{{ selected.name }}</h2>
+
+  <div class="card">
+    <h2>Tasks by status</h2>
+    <table>
+      {% for status, n in task_status.items() %}
+      <tr><td>{{ status|replace('_', ' ') }}</td><td class="num">{{ n }}</td></tr>
+      {% else %}
+      <tr><td class="muted">No tasks.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Hours per member</h2>
+    <table>
+      <tr><th>Member</th><th class="num">Logged</th><th class="num">Timed segments</th><th class="num">Total</th></tr>
+      {% for r in hours_per_member %}
+      <tr>
+        <td>{{ r.name }}</td>
+        <td class="num">{{ r.logged_hours }}</td>
+        <td class="num">{{ r.segment_hours }}</td>
+        <td class="num">{{ r.total_hours }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">No hours recorded.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Job-type productivity</h2>
+    <table>
+      <tr>
+        <th>Job type</th><th class="num">Records</th><th class="num">Quantity</th>
+        <th class="num">Person-hours</th><th class="num">Rate (min/unit)</th>
+        <th class="num">Target</th><th class="num">Δ</th>
+      </tr>
+      {% for r in job_productivity %}
+      <tr>
+        <td>{{ r.label }}</td>
+        <td class="num">{{ r.records }}</td>
+        <td class="num">{{ r.quantity }} {{ r.unit }}</td>
+        <td class="num">{{ r.person_hours }}</td>
+        <td class="num">{{ r.mean_rate if r.mean_rate is not none else '–' }}</td>
+        <td class="num">{{ r.expected_rate if r.expected_rate is not none else '–' }}</td>
+        <td class="num">
+          {% if r.delta is not none %}
+            <span class="pill {{ 'danger' if r.delta > 0 else 'ok' }}">
+              {{ '+' if r.delta > 0 else '' }}{{ r.delta }}
+            </span>
+          {% else %}–{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">No timed segments in this project.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>Structures by status</h2>
+    <table>
+      {% for status, n in structure_status.items() %}
+      <tr><td>{{ status|replace('_', ' ') }}</td><td class="num">{{ n }}</td></tr>
+      {% else %}
+      <tr><td class="muted">No structures.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Recent inspections</h2>
+    <table>
+      <tr><th>Date</th><th>Structure</th><th>Inspector</th><th>Risk</th><th>Condition set</th></tr>
+      {% for i in recent_inspections %}
+      <tr>
+        <td>{{ i.on }}</td>
+        <td>{{ i.structure }}</td>
+        <td>{{ i.inspector }}</td>
+        <td>
+          {% if i.risk %}
+            <span class="pill {{ 'danger' if i.risk in ('high','critical') else 'warn' if i.risk == 'medium' else 'ok' }}">{{ i.risk }}</span>
+          {% else %}–{% endif %}
+        </td>
+        <td>{{ i.condition|replace('_', ' ') if i.condition else '–' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No inspections yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</main>
+{% endblock %}

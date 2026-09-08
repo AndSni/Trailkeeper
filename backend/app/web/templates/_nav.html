@@ -1,0 +1,9 @@
+<header class="nav">
+  <span class="brand">Trailkeeper</span>
+  <a href="/app" class="{{ 'active' if active == 'dashboard' else '' }}">Dashboard</a>
+  {% if is_admin %}
+  <a href="/app/members" class="{{ 'active' if active == 'members' else '' }}">Members</a>
+  {% endif %}
+  <span class="spacer"></span>
+  <a href="/logout">Sign out</a>
+</header>

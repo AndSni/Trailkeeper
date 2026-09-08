@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Create an organisation · Trailkeeper{% endblock %}
+{% block body %}
+<div class="auth">
+  <h1>Trailkeeper</h1>
+  <div class="card">
+    <h2>Create an organisation</h2>
+    {% if disabled %}
+      <p class="muted">Open registration is turned off on this server. Ask an
+      admin for an invite link.</p>
+    {% else %}
+      {% if error %}<div class="error">{{ error }}</div>{% endif %}
+      <form method="post" action="/register">
+        <label for="organisation_name">Organisation name</label>
+        <input id="organisation_name" name="organisation_name" required autofocus>
+        <label for="name">Your name</label>
+        <input id="name" name="name" required>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="username" required>
+        <label for="password">Password <span class="muted">(8+ characters)</span></label>
+        <input id="password" name="password" type="password" autocomplete="new-password" required minlength="8">
+        <button type="submit">Create organisation</button>
+      </form>
+    {% endif %}
+  </div>
+  <p class="muted">Already have an account? <a href="/login">Sign in</a>.</p>
+</div>
+{% endblock %}

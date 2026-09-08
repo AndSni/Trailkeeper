@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Members · {{ org_name }}{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block body %}
+<main>
+  <h1>Members</h1>
+
+  {% if invited_link %}
+  <div class="card">
+    <h2>Invite created</h2>
+    <p class="muted">Send this link to the new member. It works once and expires.</p>
+    <div class="linkbox">{{ invited_link }}</div>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>People</h2>
+    <table>
+      <tr><th>Name</th><th>Email</th><th>Role</th></tr>
+      {% for m in members %}
+      <tr><td>{{ m.name }}</td><td>{{ m.email }}</td><td><span class="pill">{{ m.role }}</span></td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Invite a member</h2>
+    <form method="post" action="/app/invites">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required>
+      <label for="org_role">Role</label>
+      <select id="org_role" name="org_role">
+        {% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == 'editor' else '' }}>{{ r }}</option>{% endfor %}
+      </select>
+      <button type="submit">Create invite link</button>
+    </form>
+  </div>
+
+  {% if pending %}
+  <div class="card">
+    <h2>Pending invites</h2>
+    <table>
+      <tr><th>Email</th><th>Role</th><th>Expires</th><th>Link</th></tr>
+      {% for iv in pending %}
+      <tr>
+        <td>{{ iv.email }}</td>
+        <td><span class="pill">{{ iv.role }}</span></td>
+        <td>{{ iv.expires }}</td>
+        <td><span class="linkbox">{{ iv.link }}</span></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+</main>
+{% endblock %}

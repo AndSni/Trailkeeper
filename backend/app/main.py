@@ -1,7 +1,8 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from app.config import settings
 from app.routes import (
@@ -20,6 +21,7 @@ from app.routes import (
     trails,
     work_logs,
 )
+from app.web import console
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -54,6 +56,12 @@ app.include_router(structures.router)
 app.include_router(inspection_forms.router)
 app.include_router(inspections.router)
 app.include_router(sync.router)
+app.include_router(console.router)
+
+
+@app.exception_handler(console.NeedsLogin)
+def _needs_login_redirect(request: Request, exc: console.NeedsLogin) -> RedirectResponse:
+    return RedirectResponse("/login", status_code=303)
 
 
 @app.get("/health", tags=["meta"])
@@ -61,6 +69,6 @@ def health() -> dict:
     return {"status": "ok"}
 
 
-@app.get("/", tags=["meta"])
-def root() -> dict:
+@app.get("/version", tags=["meta"])
+def version() -> dict:
     return {"name": "Trailkeeper", "version": app.version}
