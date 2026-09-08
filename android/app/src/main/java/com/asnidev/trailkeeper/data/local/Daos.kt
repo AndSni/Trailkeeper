@@ -86,6 +86,45 @@ interface SegmentWorkDao {
 }
 
 @Dao
+interface StructureDao {
+    @Upsert suspend fun upsertAll(rows: List<StructureEntity>)
+
+    @Upsert suspend fun upsert(row: StructureEntity)
+
+    @Query("SELECT * FROM structures WHERE organisationId = :orgId ORDER BY name")
+    fun observeForOrg(orgId: String): Flow<List<StructureEntity>>
+
+    @Query("DELETE FROM structures WHERE id = :id") suspend fun deleteById(id: String)
+}
+
+@Dao
+interface InspectionFormDao {
+    @Upsert suspend fun upsertAll(rows: List<InspectionFormEntity>)
+
+    @Upsert suspend fun upsert(row: InspectionFormEntity)
+
+    @Query("SELECT * FROM inspection_forms ORDER BY name")
+    fun observeAll(): Flow<List<InspectionFormEntity>>
+
+    @Query("DELETE FROM inspection_forms WHERE id = :id") suspend fun deleteById(id: String)
+}
+
+@Dao
+interface InspectionDao {
+    @Upsert suspend fun upsertAll(rows: List<InspectionEntity>)
+
+    @Upsert suspend fun upsert(row: InspectionEntity)
+
+    @Query("SELECT * FROM inspections WHERE projectId = :projectId ORDER BY inspectedOn DESC")
+    fun observeForProject(projectId: String): Flow<List<InspectionEntity>>
+
+    @Query("DELETE FROM inspections WHERE id = :id") suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM inspections WHERE projectId = :projectId")
+    suspend fun deleteForProject(projectId: String)
+}
+
+@Dao
 interface ProjectMemberDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(rows: List<ProjectMemberEntity>)
 

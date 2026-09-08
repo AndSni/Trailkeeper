@@ -148,6 +148,51 @@ data class SegmentWorkDto(
     @SerializedName("vs_expected_min_per_unit") val vsExpectedMinPerUnit: Double?,
 )
 
+data class StructureDto(
+    val id: String,
+    @SerializedName("organisation_id") val organisationId: String,
+    val name: String,
+    @SerializedName("structure_type") val structureType: String,
+    val status: String,
+    val geometry: JsonElement?, // GeoJSON Point, or null
+    @SerializedName("nearest_trail_id") val nearestTrailId: String?,
+    val material: String,
+    @SerializedName("installed_on") val installedOn: String?,
+    @SerializedName("inspection_interval_days") val inspectionIntervalDays: Int?,
+    val notes: String,
+)
+
+data class InspectionFieldDto(
+    val key: String,
+    val label: String?,
+    val type: String, // bool | text | number | choice | section
+    val required: Boolean = false,
+    val choices: List<String> = emptyList(),
+)
+
+data class InspectionFormDto(
+    val id: String,
+    val name: String,
+    @SerializedName("target_type") val targetType: String,
+    val fields: List<InspectionFieldDto> = emptyList(),
+    val version: Int,
+    @SerializedName("is_active") val isActive: Boolean,
+)
+
+data class InspectionDto(
+    val id: String,
+    @SerializedName("project_id") val projectId: String,
+    @SerializedName("structure_id") val structureId: String,
+    @SerializedName("form_id") val formId: String?,
+    @SerializedName("form_version") val formVersion: Int?,
+    @SerializedName("inspector_id") val inspectorId: String?,
+    @SerializedName("inspected_on") val inspectedOn: String,
+    val answers: JsonElement?,
+    val risk: String?,
+    val condition: String?,
+    val notes: String,
+)
+
 data class SnapshotDto(
     val project: ProjectDto,
     val members: List<ProjectMemberDto> = emptyList(),
@@ -157,7 +202,30 @@ data class SnapshotDto(
     val messages: List<MessageDto> = emptyList(),
     @SerializedName("job_types") val jobTypes: List<JobTypeDto> = emptyList(),
     @SerializedName("segment_work") val segmentWork: List<SegmentWorkDto> = emptyList(),
+    val structures: List<StructureDto> = emptyList(),
+    @SerializedName("inspection_forms") val inspectionForms: List<InspectionFormDto> = emptyList(),
+    val inspections: List<InspectionDto> = emptyList(),
     @SerializedName("high_seq") val highSeq: Long,
+)
+
+data class StructureCreateRequest(
+    val name: String,
+    @SerializedName("structure_type") val structureType: String,
+    val status: String = "good",
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val material: String = "",
+    val notes: String = "",
+)
+
+data class InspectionCreateRequest(
+    @SerializedName("project_id") val projectId: String,
+    @SerializedName("structure_id") val structureId: String,
+    @SerializedName("form_id") val formId: String? = null,
+    val answers: Map<String, Any?> = emptyMap(),
+    val risk: String? = null,
+    val condition: String? = null,
+    val notes: String = "",
 )
 
 data class SegmentWorkCreateRequest(

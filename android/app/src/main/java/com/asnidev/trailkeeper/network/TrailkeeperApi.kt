@@ -45,6 +45,12 @@ interface TrailkeeperApi {
         @Query("group_by") groupBy: String,
     ): RollupDto
 
+    @POST("structures")
+    suspend fun createStructure(@Body body: StructureCreateRequest): StructureDto
+
+    @POST("inspections")
+    suspend fun createInspection(@Body body: InspectionCreateRequest): InspectionDto
+
     @GET("notifications")
     suspend fun notifications(@Query("limit") limit: Int = 100): List<NotificationDto>
 

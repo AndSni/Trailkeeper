@@ -152,6 +152,52 @@ data class SegmentWorkEntity(
     val vsExpectedMinPerUnit: Double?,
 )
 
+/** Built asset on the network (culvert, bridge, sign, ...). Org-wide like a
+ * trail; geometry kept as raw GeoJSON for the map layer. */
+@Entity(tableName = "structures")
+data class StructureEntity(
+    @PrimaryKey val id: String,
+    val organisationId: String,
+    val name: String,
+    val structureType: String,
+    val status: String,
+    val geometryJson: String?,
+    val nearestTrailId: String?,
+    val material: String,
+    val installedOn: String?,
+    val inspectionIntervalDays: Int?,
+    val notes: String,
+)
+
+/** A reusable JSON-schema inspection questionnaire (org-wide, versioned).
+ * [fieldsJson] is the serialized list of InspectionFieldDto. */
+@Entity(tableName = "inspection_forms")
+data class InspectionFormEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val targetType: String,
+    val fieldsJson: String,
+    val version: Int,
+    val isActive: Boolean,
+)
+
+/** One filled-in form against one structure, in a project's context.
+ * [answersJson] is the serialized answers object. */
+@Entity(tableName = "inspections")
+data class InspectionEntity(
+    @PrimaryKey val id: String,
+    val projectId: String,
+    val structureId: String,
+    val formId: String?,
+    val formVersion: Int?,
+    val inspectorId: String?,
+    val inspectedOn: String,
+    val answersJson: String,
+    val risk: String?,
+    val condition: String?,
+    val notes: String,
+)
+
 /**
  * A pending offline write, queued for `POST /sync/push`. Rows are drained
  * before every pull; each carries the fields as a JSON object and the

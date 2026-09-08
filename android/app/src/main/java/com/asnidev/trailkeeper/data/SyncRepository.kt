@@ -9,6 +9,9 @@ import com.asnidev.trailkeeper.data.local.TaskEntity
 import com.asnidev.trailkeeper.data.local.TrailkeeperDb
 import com.asnidev.trailkeeper.data.local.toEntity
 import com.asnidev.trailkeeper.network.ApiClient
+import com.asnidev.trailkeeper.network.InspectionCreateRequest
+import com.asnidev.trailkeeper.network.InspectionDto
+import com.asnidev.trailkeeper.network.InspectionFormDto
 import com.asnidev.trailkeeper.network.JobTypeDto
 import com.asnidev.trailkeeper.network.MessageDto
 import com.asnidev.trailkeeper.network.ProjectDto
@@ -16,6 +19,8 @@ import com.asnidev.trailkeeper.network.ProjectMemberDto
 import com.asnidev.trailkeeper.network.RollupDto
 import com.asnidev.trailkeeper.network.SegmentWorkCreateRequest
 import com.asnidev.trailkeeper.network.SegmentWorkDto
+import com.asnidev.trailkeeper.network.StructureCreateRequest
+import com.asnidev.trailkeeper.network.StructureDto
 import com.asnidev.trailkeeper.network.SyncChangeDto
 import com.asnidev.trailkeeper.network.SyncOpRequest
 import com.asnidev.trailkeeper.network.SyncPushRequest
@@ -138,6 +143,19 @@ object SyncRepository {
     suspend fun segmentRollup(projectId: String, groupBy: String): RollupDto =
         ApiClient.api().segmentRollup(projectId, groupBy)
 
+    /** Create a structure online; fold the authoritative row into Room. */
+    suspend fun createStructure(req: StructureCreateRequest) {
+        val dto = ApiClient.api().createStructure(req)
+        db.structureDao().upsert(dto.toEntity())
+    }
+
+    /** Record an inspection online. A `condition` may change the structure's
+     * status server-side - a follow-up sync picks that up. */
+    suspend fun createInspection(req: InspectionCreateRequest) {
+        val dto = ApiClient.api().createInspection(req)
+        db.inspectionDao().upsert(dto.toEntity())
+    }
+
     private suspend fun enqueue(
         entityType: String,
         entityId: String,
@@ -226,6 +244,10 @@ object SyncRepository {
             db.jobTypeDao().upsertAll(snap.jobTypes.map { it.toEntity() })
             db.segmentWorkDao().deleteForProject(projectId)
             db.segmentWorkDao().upsertAll(snap.segmentWork.map { it.toEntity() })
+            db.structureDao().upsertAll(snap.structures.map { it.toEntity() })
+            db.inspectionFormDao().upsertAll(snap.inspectionForms.map { it.toEntity() })
+            db.inspectionDao().deleteForProject(projectId)
+            db.inspectionDao().upsertAll(snap.inspections.map { it.toEntity() })
             db.syncStateDao().markProjectSnapshotted(ProjectSyncEntity(projectId, snap.highSeq))
         }
     }
@@ -277,6 +299,21 @@ object SyncRepository {
                 else
                     db.segmentWorkDao()
                         .upsert(gson.fromJson(row, SegmentWorkDto::class.java).toEntity())
+            "structure" ->
+                if (c.op == "delete" || row == null) db.structureDao().deleteById(c.entityId)
+                else
+                    db.structureDao()
+                        .upsert(gson.fromJson(row, StructureDto::class.java).toEntity())
+            "inspection_form" ->
+                if (c.op == "delete" || row == null) db.inspectionFormDao().deleteById(c.entityId)
+                else
+                    db.inspectionFormDao()
+                        .upsert(gson.fromJson(row, InspectionFormDto::class.java).toEntity())
+            "inspection" ->
+                if (c.op == "delete" || row == null) db.inspectionDao().deleteById(c.entityId)
+                else
+                    db.inspectionDao()
+                        .upsert(gson.fromJson(row, InspectionDto::class.java).toEntity())
         }
     }
 

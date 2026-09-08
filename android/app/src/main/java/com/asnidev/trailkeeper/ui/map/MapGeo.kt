@@ -1,5 +1,6 @@
 package com.asnidev.trailkeeper.ui.map
 
+import com.asnidev.trailkeeper.data.local.StructureEntity
 import com.asnidev.trailkeeper.data.local.TaskEntity
 import com.asnidev.trailkeeper.data.local.TrailEntity
 import com.google.gson.JsonArray
@@ -28,12 +29,30 @@ object MapGeo {
             }
         )
 
-    /** Bounds over every trail line and task point, or null if there's nothing. */
-    fun bounds(trails: List<TrailEntity>, tasks: List<TaskEntity>): LatLngBounds? {
+    fun structureFeatures(structures: List<StructureEntity>): String =
+        featureCollection(
+            structures.mapNotNull { s ->
+                s.geometryJson?.let { g ->
+                    feature(
+                        g,
+                        """"kind":"structure","type":${quote(s.structureType)},"status":${quote(s.status)}""",
+                    )
+                }
+            }
+        )
+
+    /** Bounds over every trail line, task point and structure point, or null. */
+    fun bounds(
+        trails: List<TrailEntity>,
+        tasks: List<TaskEntity>,
+        structures: List<StructureEntity> = emptyList(),
+    ): LatLngBounds? {
         val pts = ArrayList<LatLng>()
-        (trails.mapNotNull { it.geometryJson } + tasks.mapNotNull { it.geometryJson }).forEach {
-            collectPoints(it, pts)
-        }
+        (
+            trails.mapNotNull { it.geometryJson } +
+                tasks.mapNotNull { it.geometryJson } +
+                structures.mapNotNull { it.geometryJson }
+        ).forEach { collectPoints(it, pts) }
         if (pts.isEmpty()) return null
         return LatLngBounds.Builder().includes(pts).build()
     }

@@ -63,6 +63,8 @@ import androidx.core.content.ContextCompat
 import com.asnidev.trailkeeper.ui.map.ProjectMap
 import com.asnidev.trailkeeper.ui.segments.SegmentWorkTab
 import com.asnidev.trailkeeper.ui.segments.SegmentWorkViewModel
+import com.asnidev.trailkeeper.ui.structures.StructuresTab
+import com.asnidev.trailkeeper.ui.structures.StructuresViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -86,7 +88,13 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
             key = "segwork-$projectId",
             factory = viewModelFactory { initializer { SegmentWorkViewModel(projectId) } },
         )
+    val structuresVm: StructuresViewModel =
+        viewModel(
+            key = "structures-$projectId",
+            factory = viewModelFactory { initializer { StructuresViewModel(projectId) } },
+        )
     val s by vm.state.collectAsState()
+    val structures by structuresVm.structures.collectAsState()
     val messages by vm.discussion.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showAdd by remember { mutableStateOf(false) }
@@ -103,7 +111,9 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
             hasLocation = it
         }
     LaunchedEffect(tab) {
-        if (tab == 2 && !hasLocation) requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        if ((tab == 2 || tab == 5) && !hasLocation) {
+            requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
     }
 
     Scaffold(
@@ -152,6 +162,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                 Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Map") })
                 Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Discussion") })
                 Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Work") })
+                Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("Structures") })
             }
 
             Box(Modifier.fillMaxSize()) {
@@ -163,11 +174,13 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                         ProjectMap(
                             trails = s.trails,
                             tasks = s.tasks,
+                            structures = structures,
                             hasLocationPermission = hasLocation,
                             modifier = Modifier.fillMaxSize(),
                         )
                     tab == 3 -> DiscussionTab(messages, onSend = vm::postMessage)
-                    else -> SegmentWorkTab(workVm, s.trails)
+                    tab == 4 -> SegmentWorkTab(workVm, s.trails)
+                    else -> StructuresTab(structuresVm, hasLocation)
                 }
             }
         }

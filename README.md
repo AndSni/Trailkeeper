@@ -213,6 +213,22 @@ The feature nothing off-the-shelf has (`docs/BLUEPRINT.md` §10).
 - All three ride the sync stream (`snapshot` + `changes`); structures and
   forms are org-wide, inspections project-scoped. Creation is online for now
 
+## What Phase 5 covers (Android)
+
+- **Structures tab** on the project screen - a list of structures with a
+  status badge; "Add structure" opens a dialog (name, type, material, notes,
+  optional "attach current location" via fused location). Tap a structure for
+  its detail: condition, notes, and its inspection history
+- **Log inspection** - pick an active form (or freeform), the form's fields
+  render by type (bool → switch, text / number, choice → chips, section →
+  heading); then a risk chip row and an optional "set structure condition"
+  chip row. `POST /inspections` online; a set condition updates the structure
+  on the next sync
+- **Map** - structures show as their own point layer alongside trails and
+  tasks; the camera fit includes them
+- Structures / forms / inspections ride the sync snapshot + changes stream;
+  Room bumped to v5
+
 ## Roadmap
 
 `P1` map + offline tiles + live GPS + GPX import + tasks + sync ·

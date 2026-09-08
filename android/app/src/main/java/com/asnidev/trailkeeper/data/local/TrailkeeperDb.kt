@@ -19,8 +19,11 @@ import androidx.room.RoomDatabase
         NotificationEntity::class,
         JobTypeEntity::class,
         SegmentWorkEntity::class,
+        StructureEntity::class,
+        InspectionFormEntity::class,
+        InspectionEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class TrailkeeperDb : RoomDatabase() {
@@ -35,6 +38,9 @@ abstract class TrailkeeperDb : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao
     abstract fun jobTypeDao(): JobTypeDao
     abstract fun segmentWorkDao(): SegmentWorkDao
+    abstract fun structureDao(): StructureDao
+    abstract fun inspectionFormDao(): InspectionFormDao
+    abstract fun inspectionDao(): InspectionDao
 
     companion object {
         @Volatile private var built: TrailkeeperDb? = null

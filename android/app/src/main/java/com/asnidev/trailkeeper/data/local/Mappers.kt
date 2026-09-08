@@ -1,11 +1,14 @@
 package com.asnidev.trailkeeper.data.local
 
+import com.asnidev.trailkeeper.network.InspectionDto
+import com.asnidev.trailkeeper.network.InspectionFormDto
 import com.asnidev.trailkeeper.network.JobTypeDto
 import com.asnidev.trailkeeper.network.MessageDto
 import com.asnidev.trailkeeper.network.NotificationDto
 import com.asnidev.trailkeeper.network.ProjectDto
 import com.asnidev.trailkeeper.network.ProjectMemberDto
 import com.asnidev.trailkeeper.network.SegmentWorkDto
+import com.asnidev.trailkeeper.network.StructureDto
 import com.asnidev.trailkeeper.network.TaskDto
 import com.asnidev.trailkeeper.network.TrailDto
 import com.asnidev.trailkeeper.network.WorkLogDto
@@ -120,6 +123,46 @@ fun SegmentWorkDto.toEntity() =
         personHours = personHours,
         rateMinPerUnit = rateMinPerUnit,
         vsExpectedMinPerUnit = vsExpectedMinPerUnit,
+    )
+
+fun StructureDto.toEntity() =
+    StructureEntity(
+        id = id,
+        organisationId = organisationId,
+        name = name,
+        structureType = structureType,
+        status = status,
+        geometryJson = geometry?.toString(),
+        nearestTrailId = nearestTrailId,
+        material = material,
+        installedOn = installedOn,
+        inspectionIntervalDays = inspectionIntervalDays,
+        notes = notes,
+    )
+
+fun InspectionFormDto.toEntity() =
+    InspectionFormEntity(
+        id = id,
+        name = name,
+        targetType = targetType,
+        fieldsJson = gson.toJson(fields),
+        version = version,
+        isActive = isActive,
+    )
+
+fun InspectionDto.toEntity() =
+    InspectionEntity(
+        id = id,
+        projectId = projectId,
+        structureId = structureId,
+        formId = formId,
+        formVersion = formVersion,
+        inspectorId = inspectorId,
+        inspectedOn = inspectedOn,
+        answersJson = answers?.toString() ?: "{}",
+        risk = risk,
+        condition = condition,
+        notes = notes,
     )
 
 fun NotificationDto.toEntity() =
