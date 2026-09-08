@@ -1,9 +1,11 @@
 package com.asnidev.trailkeeper.data.local
 
+import com.asnidev.trailkeeper.network.JobTypeDto
 import com.asnidev.trailkeeper.network.MessageDto
 import com.asnidev.trailkeeper.network.NotificationDto
 import com.asnidev.trailkeeper.network.ProjectDto
 import com.asnidev.trailkeeper.network.ProjectMemberDto
+import com.asnidev.trailkeeper.network.SegmentWorkDto
 import com.asnidev.trailkeeper.network.TaskDto
 import com.asnidev.trailkeeper.network.TrailDto
 import com.asnidev.trailkeeper.network.WorkLogDto
@@ -84,6 +86,40 @@ fun MessageDto.toEntity() =
         body = body,
         mentionedUserIdsJson = gson.toJson(mentionedUserIds),
         createdAt = createdAt,
+    )
+
+fun JobTypeDto.toEntity() =
+    JobTypeEntity(
+        id = id,
+        activity = activity,
+        key = key,
+        label = label,
+        unit = unit,
+        defaultCrew = defaultCrew,
+        expectedRate = expectedRate,
+        color = color,
+        sortGroup = sortGroup,
+    )
+
+fun SegmentWorkDto.toEntity() =
+    SegmentWorkEntity(
+        id = id,
+        projectId = projectId,
+        jobTypeId = jobTypeId,
+        trailId = trailId,
+        quantity = quantity,
+        unit = unit,
+        quantitySource = quantitySource,
+        startedAt = startedAt,
+        endedAt = endedAt,
+        activeSeconds = activeSeconds,
+        crewSize = crewSize,
+        equipmentJson = gson.toJson(equipment),
+        notes = notes,
+        createdById = createdById,
+        personHours = personHours,
+        rateMinPerUnit = rateMinPerUnit,
+        vsExpectedMinPerUnit = vsExpectedMinPerUnit,
     )
 
 fun NotificationDto.toEntity() =

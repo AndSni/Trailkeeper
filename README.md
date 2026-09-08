@@ -178,6 +178,21 @@ The feature nothing off-the-shelf has (`docs/BLUEPRINT.md` §10).
 - Synced for offline viewing; creating a record is online for now (the timer
   runs on the phone, saves on stop)
 
+## What Phase 4 covers (Android) - the timer
+
+- **Work tab** on the project screen - an on-phone stopwatch: pick a job type,
+  Start / Pause / Resume / Stop. Un-paused seconds are the "active" time;
+  pause spans are kept and sent with the record
+- **Log on stop** - quantity (pre-filled from elapsed time for `hours` work),
+  crew size (pre-filled from the job type), equipment, notes, an optional
+  trail. `POST /segment-work` while online, then the authoritative row folds
+  straight into Room
+- **Productivity** - `GET /segment-work/rollup` grouped by job type / trail /
+  member / week: per group Σ quantity, Σ person-hours, weighted mean rate and
+  the delta vs the target rate (red when slower, green when faster)
+- Job types and recorded segments ride the normal sync (`snapshot` seeds them,
+  `changes` keeps them current); Room bumped to v4
+
 ## Roadmap
 
 `P1` map + offline tiles + live GPS + GPX import + tasks + sync ·

@@ -116,6 +116,38 @@ data class MessageDto(
     @SerializedName("created_at") val createdAt: String,
 )
 
+data class JobTypeDto(
+    val id: String,
+    val activity: String,
+    val key: String,
+    val label: String,
+    val unit: String, // hours | km | m2 | count
+    @SerializedName("default_crew") val defaultCrew: Int,
+    @SerializedName("expected_rate") val expectedRate: Double?,
+    val color: String,
+    @SerializedName("sort_group") val sortGroup: String,
+)
+
+data class SegmentWorkDto(
+    val id: String,
+    @SerializedName("project_id") val projectId: String,
+    @SerializedName("job_type_id") val jobTypeId: String?,
+    @SerializedName("trail_id") val trailId: String?,
+    val quantity: Double,
+    val unit: String,
+    @SerializedName("quantity_source") val quantitySource: String,
+    @SerializedName("started_at") val startedAt: String,
+    @SerializedName("ended_at") val endedAt: String?,
+    @SerializedName("active_seconds") val activeSeconds: Int,
+    @SerializedName("crew_size") val crewSize: Int,
+    val equipment: List<String> = emptyList(),
+    val notes: String,
+    @SerializedName("created_by_id") val createdById: String?,
+    @SerializedName("person_hours") val personHours: Double,
+    @SerializedName("rate_min_per_unit") val rateMinPerUnit: Double?,
+    @SerializedName("vs_expected_min_per_unit") val vsExpectedMinPerUnit: Double?,
+)
+
 data class SnapshotDto(
     val project: ProjectDto,
     val members: List<ProjectMemberDto> = emptyList(),
@@ -123,7 +155,41 @@ data class SnapshotDto(
     val tasks: List<TaskDto> = emptyList(),
     @SerializedName("work_logs") val workLogs: List<WorkLogDto> = emptyList(),
     val messages: List<MessageDto> = emptyList(),
+    @SerializedName("job_types") val jobTypes: List<JobTypeDto> = emptyList(),
+    @SerializedName("segment_work") val segmentWork: List<SegmentWorkDto> = emptyList(),
     @SerializedName("high_seq") val highSeq: Long,
+)
+
+data class SegmentWorkCreateRequest(
+    @SerializedName("project_id") val projectId: String,
+    @SerializedName("job_type_id") val jobTypeId: String,
+    @SerializedName("trail_id") val trailId: String? = null,
+    val quantity: Double?,
+    @SerializedName("quantity_source") val quantitySource: String = "manual",
+    @SerializedName("started_at") val startedAt: String,
+    @SerializedName("ended_at") val endedAt: String?,
+    @SerializedName("active_seconds") val activeSeconds: Int,
+    val pauses: List<Map<String, String>> = emptyList(),
+    @SerializedName("crew_size") val crewSize: Int = 1,
+    val equipment: List<String> = emptyList(),
+    val notes: String = "",
+)
+
+data class RollupGroupDto(
+    @SerializedName("group_key") val groupKey: String,
+    @SerializedName("group_label") val groupLabel: String,
+    @SerializedName("record_count") val recordCount: Int,
+    val unit: String,
+    @SerializedName("total_quantity") val totalQuantity: Double,
+    @SerializedName("total_person_hours") val totalPersonHours: Double,
+    @SerializedName("mean_rate_min_per_unit") val meanRateMinPerUnit: Double?,
+    @SerializedName("expected_rate") val expectedRate: Double?,
+    @SerializedName("delta_min_per_unit") val deltaMinPerUnit: Double?,
+)
+
+data class RollupDto(
+    @SerializedName("group_by") val groupBy: String,
+    val groups: List<RollupGroupDto> = emptyList(),
 )
 
 data class NotificationDto(

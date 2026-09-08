@@ -9,9 +9,13 @@ import com.asnidev.trailkeeper.data.local.TaskEntity
 import com.asnidev.trailkeeper.data.local.TrailkeeperDb
 import com.asnidev.trailkeeper.data.local.toEntity
 import com.asnidev.trailkeeper.network.ApiClient
+import com.asnidev.trailkeeper.network.JobTypeDto
 import com.asnidev.trailkeeper.network.MessageDto
 import com.asnidev.trailkeeper.network.ProjectDto
 import com.asnidev.trailkeeper.network.ProjectMemberDto
+import com.asnidev.trailkeeper.network.RollupDto
+import com.asnidev.trailkeeper.network.SegmentWorkCreateRequest
+import com.asnidev.trailkeeper.network.SegmentWorkDto
 import com.asnidev.trailkeeper.network.SyncChangeDto
 import com.asnidev.trailkeeper.network.SyncOpRequest
 import com.asnidev.trailkeeper.network.SyncPushRequest
@@ -124,6 +128,16 @@ object SyncRepository {
         drainOutbox()
     }
 
+    /** Save a timed segment. Online-only for now (the timer runs on the phone,
+     * saves on stop); the authoritative row is folded straight into Room. */
+    suspend fun logSegmentWork(req: SegmentWorkCreateRequest) {
+        val dto = ApiClient.api().createSegmentWork(req)
+        db.segmentWorkDao().upsert(dto.toEntity())
+    }
+
+    suspend fun segmentRollup(projectId: String, groupBy: String): RollupDto =
+        ApiClient.api().segmentRollup(projectId, groupBy)
+
     private suspend fun enqueue(
         entityType: String,
         entityId: String,
@@ -209,6 +223,9 @@ object SyncRepository {
             db.workLogDao().upsertAll(snap.workLogs.map { it.toEntity() })
             db.messageDao().deleteForProject(projectId)
             db.messageDao().upsertAll(snap.messages.map { it.toEntity() })
+            db.jobTypeDao().upsertAll(snap.jobTypes.map { it.toEntity() })
+            db.segmentWorkDao().deleteForProject(projectId)
+            db.segmentWorkDao().upsertAll(snap.segmentWork.map { it.toEntity() })
             db.syncStateDao().markProjectSnapshotted(ProjectSyncEntity(projectId, snap.highSeq))
         }
     }
@@ -252,6 +269,14 @@ object SyncRepository {
             "message" ->
                 if (c.op == "delete" || row == null) db.messageDao().deleteById(c.entityId)
                 else db.messageDao().upsert(gson.fromJson(row, MessageDto::class.java).toEntity())
+            "job_type" ->
+                if (c.op == "delete" || row == null) db.jobTypeDao().deleteById(c.entityId)
+                else db.jobTypeDao().upsert(gson.fromJson(row, JobTypeDto::class.java).toEntity())
+            "segment_work" ->
+                if (c.op == "delete" || row == null) db.segmentWorkDao().deleteById(c.entityId)
+                else
+                    db.segmentWorkDao()
+                        .upsert(gson.fromJson(row, SegmentWorkDto::class.java).toEntity())
         }
     }
 

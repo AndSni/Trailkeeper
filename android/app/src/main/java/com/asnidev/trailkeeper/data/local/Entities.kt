@@ -115,6 +115,43 @@ data class NotificationEntity(
     val readAt: String?,
 )
 
+/** Org-wide taxonomy: how a kind of trail work is measured (BLUEPRINT sec 10). */
+@Entity(tableName = "job_types")
+data class JobTypeEntity(
+    @PrimaryKey val id: String,
+    val activity: String,
+    val key: String,
+    val label: String,
+    val unit: String, // hours | km | m2 | count
+    val defaultCrew: Int,
+    val expectedRate: Double?, // minutes per unit
+    val color: String,
+    val sortGroup: String,
+)
+
+/** One timed piece of work. Derived numbers (person-hours, rate, delta) come
+ * pre-computed from the server; the rollup view fetches fresh from the API. */
+@Entity(tableName = "segment_work")
+data class SegmentWorkEntity(
+    @PrimaryKey val id: String,
+    val projectId: String,
+    val jobTypeId: String?,
+    val trailId: String?,
+    val quantity: Double,
+    val unit: String,
+    val quantitySource: String,
+    val startedAt: String,
+    val endedAt: String?,
+    val activeSeconds: Int,
+    val crewSize: Int,
+    val equipmentJson: String,
+    val notes: String,
+    val createdById: String?,
+    val personHours: Double,
+    val rateMinPerUnit: Double?,
+    val vsExpectedMinPerUnit: Double?,
+)
+
 /**
  * A pending offline write, queued for `POST /sync/push`. Rows are drained
  * before every pull; each carries the fields as a JSON object and the

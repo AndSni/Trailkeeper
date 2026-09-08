@@ -59,6 +59,33 @@ interface WorkLogDao {
 }
 
 @Dao
+interface JobTypeDao {
+    @Upsert suspend fun upsertAll(rows: List<JobTypeEntity>)
+
+    @Upsert suspend fun upsert(row: JobTypeEntity)
+
+    @Query("SELECT * FROM job_types ORDER BY sortGroup, label")
+    fun observeAll(): Flow<List<JobTypeEntity>>
+
+    @Query("DELETE FROM job_types WHERE id = :id") suspend fun deleteById(id: String)
+}
+
+@Dao
+interface SegmentWorkDao {
+    @Upsert suspend fun upsertAll(rows: List<SegmentWorkEntity>)
+
+    @Upsert suspend fun upsert(row: SegmentWorkEntity)
+
+    @Query("SELECT * FROM segment_work WHERE projectId = :projectId ORDER BY startedAt DESC")
+    fun observeForProject(projectId: String): Flow<List<SegmentWorkEntity>>
+
+    @Query("DELETE FROM segment_work WHERE id = :id") suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM segment_work WHERE projectId = :projectId")
+    suspend fun deleteForProject(projectId: String)
+}
+
+@Dao
 interface ProjectMemberDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(rows: List<ProjectMemberEntity>)
 

@@ -33,6 +33,18 @@ interface TrailkeeperApi {
     @POST("sync/push")
     suspend fun push(@Body body: SyncPushRequest): SyncPushResponse
 
+    @GET("job-types")
+    suspend fun listJobTypes(): List<JobTypeDto>
+
+    @POST("segment-work")
+    suspend fun createSegmentWork(@Body body: SegmentWorkCreateRequest): SegmentWorkDto
+
+    @GET("segment-work/rollup")
+    suspend fun segmentRollup(
+        @Query("project_id") projectId: String,
+        @Query("group_by") groupBy: String,
+    ): RollupDto
+
     @GET("notifications")
     suspend fun notifications(@Query("limit") limit: Int = 100): List<NotificationDto>
 

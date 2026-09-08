@@ -61,6 +61,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.asnidev.trailkeeper.ui.map.ProjectMap
+import com.asnidev.trailkeeper.ui.segments.SegmentWorkTab
+import com.asnidev.trailkeeper.ui.segments.SegmentWorkViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -78,6 +80,11 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
         viewModel(
             key = "project-$projectId",
             factory = viewModelFactory { initializer { ProjectDetailViewModel(projectId) } },
+        )
+    val workVm: SegmentWorkViewModel =
+        viewModel(
+            key = "segwork-$projectId",
+            factory = viewModelFactory { initializer { SegmentWorkViewModel(projectId) } },
         )
     val s by vm.state.collectAsState()
     val messages by vm.discussion.collectAsState()
@@ -144,6 +151,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Trails (${s.trails.size})") })
                 Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Map") })
                 Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Discussion") })
+                Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Work") })
             }
 
             Box(Modifier.fillMaxSize()) {
@@ -158,7 +166,8 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                             hasLocationPermission = hasLocation,
                             modifier = Modifier.fillMaxSize(),
                         )
-                    else -> DiscussionTab(messages, onSend = vm::postMessage)
+                    tab == 3 -> DiscussionTab(messages, onSend = vm::postMessage)
+                    else -> SegmentWorkTab(workVm, s.trails)
                 }
             }
         }
