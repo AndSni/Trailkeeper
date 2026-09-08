@@ -6,12 +6,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routes import (
     auth,
+    inspection_forms,
+    inspections,
     job_types,
     messages,
     notifications,
     org,
     projects,
     segment_work,
+    structures,
     sync,
     tasks,
     trails,
@@ -47,6 +50,9 @@ app.include_router(messages.router)
 app.include_router(notifications.router)
 app.include_router(job_types.router)
 app.include_router(segment_work.router)
+app.include_router(structures.router)
+app.include_router(inspection_forms.router)
+app.include_router(inspections.router)
 app.include_router(sync.router)
 
 

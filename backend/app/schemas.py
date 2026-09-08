@@ -7,7 +7,17 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.models import OrgRole, ProjectRole, ProjectStatus, TaskPriority, TaskStatus, TrailStatus
+from app.models import (
+    InspectionRisk,
+    OrgRole,
+    ProjectRole,
+    ProjectStatus,
+    StructureStatus,
+    StructureType,
+    TaskPriority,
+    TaskStatus,
+    TrailStatus,
+)
 
 # --------------------------------------------------------------------------- #
 # Auth
@@ -444,6 +454,125 @@ class SegmentRollupOut(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# Structures & inspections (Phase 5)
+# --------------------------------------------------------------------------- #
+
+
+class StructureCreateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    structure_type: StructureType = StructureType.other
+    status: StructureStatus = StructureStatus.good
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    material: str = Field(default="", max_length=64)
+    installed_on: date | None = None
+    inspection_interval_days: int | None = Field(default=None, ge=1)
+    notes: str = Field(default="", max_length=4000)
+
+    @field_validator("lon")
+    @classmethod
+    def _both_or_neither(cls, lon: float | None, info) -> float | None:
+        lat = info.data.get("lat")
+        if (lat is None) != (lon is None):
+            raise ValueError("lat and lon must be given together")
+        return lon
+
+
+class StructureUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    structure_type: StructureType | None = None
+    status: StructureStatus | None = None
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    material: str | None = Field(default=None, max_length=64)
+    installed_on: date | None = None
+    inspection_interval_days: int | None = Field(default=None, ge=1)
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class StructureOut(BaseModel):
+    id: uuid.UUID
+    organisation_id: uuid.UUID
+    name: str
+    structure_type: StructureType
+    status: StructureStatus
+    geometry: dict | None
+    nearest_trail_id: uuid.UUID | None
+    material: str
+    installed_on: date | None
+    inspection_interval_days: int | None
+    notes: str
+    created_by_id: uuid.UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class InspectionFormCreateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    target_type: str = Field(default="", max_length=32)
+    # Field defs: {key, label, type, required?, choices?, help?}. `type` is
+    # one of models.INSPECTION_FIELD_TYPES. Validated in the route.
+    fields: list[dict] = Field(default_factory=list)
+    is_active: bool = True
+
+
+class InspectionFormUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    target_type: str | None = Field(default=None, max_length=32)
+    fields: list[dict] | None = None
+    is_active: bool | None = None
+
+
+class InspectionFormOut(BaseModel):
+    id: uuid.UUID
+    organisation_id: uuid.UUID
+    name: str
+    target_type: str
+    fields: list[dict]
+    version: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class InspectionCreateIn(BaseModel):
+    project_id: uuid.UUID
+    structure_id: uuid.UUID
+    form_id: uuid.UUID | None = None
+    inspected_on: date | None = None
+    answers: dict = Field(default_factory=dict)
+    risk: InspectionRisk | None = None
+    condition: StructureStatus | None = None
+    notes: str = Field(default="", max_length=4000)
+
+
+class InspectionUpdateIn(BaseModel):
+    inspected_on: date | None = None
+    answers: dict | None = None
+    risk: InspectionRisk | None = None
+    condition: StructureStatus | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class InspectionOut(BaseModel):
+    id: uuid.UUID
+    organisation_id: uuid.UUID
+    project_id: uuid.UUID
+    structure_id: uuid.UUID
+    form_id: uuid.UUID | None
+    form_version: int | None
+    inspector_id: uuid.UUID | None
+    inspected_on: date
+    answers: dict
+    risk: InspectionRisk | None
+    condition: StructureStatus | None
+    notes: str
+    created_by_id: uuid.UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+
+# --------------------------------------------------------------------------- #
 # Sync
 # --------------------------------------------------------------------------- #
 
@@ -477,6 +606,9 @@ class SyncSnapshotOut(BaseModel):
     messages: list[MessageOut] = []
     job_types: list[JobTypeOut] = []
     segment_work: list[SegmentWorkOut] = []
+    structures: list[StructureOut] = []
+    inspection_forms: list[InspectionFormOut] = []
+    inspections: list[InspectionOut] = []
     high_seq: int
 
 

@@ -92,12 +92,46 @@ class TaskStatus(enum.StrEnum):
     wontfix = "wontfix"
 
 
+class StructureType(enum.StrEnum):
+    culvert = "culvert"
+    bridge = "bridge"
+    boardwalk = "boardwalk"
+    ford = "ford"
+    steps = "steps"
+    retaining_wall = "retaining_wall"
+    drain = "drain"
+    waterbar = "waterbar"
+    sign = "sign"
+    gate = "gate"
+    bench = "bench"
+    kiosk = "kiosk"
+    other = "other"
+
+
+class StructureStatus(enum.StrEnum):
+    good = "good"
+    monitor = "monitor"
+    needs_repair = "needs_repair"
+    failed = "failed"
+    decommissioned = "decommissioned"
+
+
+class InspectionRisk(enum.StrEnum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+    critical = "critical"
+
+
 _ORG_ROLES = ", ".join(f"'{r.value}'" for r in OrgRole)
 _PROJECT_ROLES = ", ".join(f"'{r.value}'" for r in ProjectRole)
 _PROJECT_STATUSES = ", ".join(f"'{s.value}'" for s in ProjectStatus)
 _TRAIL_STATUSES = ", ".join(f"'{s.value}'" for s in TrailStatus)
 _TASK_PRIORITIES = ", ".join(f"'{p.value}'" for p in TaskPriority)
 _TASK_STATUSES = ", ".join(f"'{s.value}'" for s in TaskStatus)
+_STRUCTURE_TYPES = ", ".join(f"'{t.value}'" for t in StructureType)
+_STRUCTURE_STATUSES = ", ".join(f"'{s.value}'" for s in StructureStatus)
+_INSPECTION_RISKS = ", ".join(f"'{r.value}'" for r in InspectionRisk)
 
 
 class TimestampMixin:
@@ -383,6 +417,9 @@ CHANGE_ENTITY_TYPES = (
     "message",
     "job_type",
     "segment_work",
+    "structure",
+    "inspection_form",
+    "inspection",
 )
 
 
@@ -606,6 +643,117 @@ class SegmentWorkRecord(Base, TimestampMixin):
     crew_size: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     equipment: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# --------------------------------------------------------------------------- #
+# Structures & inspections (Phase 5) - see docs/BLUEPRINT.md sec 3, sec 15.
+#
+# A Structure is a built asset on the network (culvert, bridge, sign, ...) -
+# org-wide like a Trail, with a Point location that auto-attaches to the
+# nearest trail. An InspectionForm is a reusable JSON-schema questionnaire
+# (org-wide, versioned); an Inspection is one filled-in form against one
+# structure, recorded in a project's context. An inspection may carry a
+# `condition` that writes back to the structure's status.
+# --------------------------------------------------------------------------- #
+
+INSPECTION_FIELD_TYPES = ("bool", "text", "number", "choice", "section")
+
+
+class Structure(Base, TimestampMixin):
+    __tablename__ = "structures"
+    __table_args__ = (
+        CheckConstraint(f"structure_type in ({_STRUCTURE_TYPES})", name="ck_structure_type"),
+        CheckConstraint(f"status in ({_STRUCTURE_STATUSES})", name="ck_structure_status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organisations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    structure_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default=StructureStatus.good.value, nullable=False
+    )
+    geom: Mapped[WKBElement | None] = mapped_column(
+        Geometry(geometry_type="POINT", srid=4326), nullable=True
+    )
+    nearest_trail_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("trails.id", ondelete="SET NULL"), nullable=True
+    )
+    material: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    installed_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # For the future `inspection_due` scheduler (BLUEPRINT sec 12); null = no
+    # routine interval.
+    inspection_interval_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class InspectionForm(Base, TimestampMixin):
+    __tablename__ = "inspection_forms"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organisations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    # Which StructureType this form is meant for; "" = any structure.
+    target_type: Mapped[str] = mapped_column(String(32), default="", nullable=False)
+    # List of field defs: {key, label, type, required?, choices?, help?}.
+    # `type` is one of INSPECTION_FIELD_TYPES. Not queried by element.
+    schema_json: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    # Bumped on every edit so an Inspection can pin the version it answered.
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Inspection(Base, TimestampMixin):
+    __tablename__ = "inspections"
+    __table_args__ = (
+        CheckConstraint(
+            f"risk is null or risk in ({_INSPECTION_RISKS})", name="ck_inspection_risk"
+        ),
+        CheckConstraint(
+            f"condition is null or condition in ({_STRUCTURE_STATUSES})",
+            name="ck_inspection_condition",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organisations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    structure_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("structures.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    form_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("inspection_forms.id", ondelete="SET NULL"), nullable=True
+    )
+    form_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    inspector_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    inspected_on: Mapped[date] = mapped_column(Date, nullable=False)
+    # Answers keyed by the form field `key`. Free-form when there's no form.
+    answers: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    risk: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # If set, writes back to the structure's status on save.
+    condition: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    # Branded PDF export lands in P6 (BLUEPRINT sec 11); column reserved.
+    pdf_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

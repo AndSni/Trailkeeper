@@ -193,6 +193,26 @@ The feature nothing off-the-shelf has (`docs/BLUEPRINT.md` §10).
 - Job types and recorded segments ride the normal sync (`snapshot` seeds them,
   `changes` keeps them current); Room bumped to v4
 
+## What Phase 5 covers (backend) - structures & inspections
+
+- **Structures** (`GET/POST/PATCH/DELETE /structures`) - built assets on the
+  network (culvert, bridge, sign, ...). Org-wide like trails; any member
+  views, editor+ mutates. Optional `Point` location auto-attaches to the
+  nearest trail (same 75 m radius as tasks). `status` ∈
+  good / monitor / needs_repair / failed / decommissioned;
+  `inspection_interval_days` is reserved for the `inspection_due` scheduler
+- **Inspection forms** (`GET/POST/PATCH/DELETE /inspection-forms`) - reusable
+  JSON-schema questionnaires, org-wide, admin+ mutates. `fields` is a list of
+  `{key, label, type, required?, choices?}` where `type` ∈
+  bool / text / number / choice / section. Every edit bumps `version`
+- **Inspections** (`GET/POST/PATCH/DELETE /inspections`) - one filled-in form
+  against one structure, in a project's context. Project members record;
+  author or org admin edits. Pins the form `version` it answered; an optional
+  `condition` writes back to the structure's `status`. `pdf_key` column is
+  reserved - branded PDF export lands in P6
+- All three ride the sync stream (`snapshot` + `changes`); structures and
+  forms are org-wide, inspections project-scoped. Creation is online for now
+
 ## Roadmap
 
 `P1` map + offline tiles + live GPS + GPX import + tasks + sync ·

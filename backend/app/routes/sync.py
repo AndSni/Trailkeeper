@@ -22,17 +22,23 @@ from app.db import get_db
 from app.deps import CurrentMembership, CurrentUser
 from app.models import (
     ChangeLog,
+    Inspection,
+    InspectionForm,
     JobType,
     Message,
     Project,
     ProjectMember,
     SegmentWorkRecord,
+    Structure,
     Task,
     Trail,
     User,
     WorkLog,
 )
+from app.routes.inspection_forms import fetch_inspection_form_out
+from app.routes.inspections import fetch_inspection_out
 from app.routes.segment_work import fetch_segment_out
+from app.routes.structures import fetch_structure_out
 from app.routes.tasks import fetch_task_out
 from app.routes.trails import fetch_trail_out
 from app.schemas import (
@@ -102,6 +108,12 @@ def _serialize_entity(db: Session, entity_type: str, entity_id: uuid.UUID) -> di
         out = None if jt is None or jt.deleted_at is not None else JobTypeOut.model_validate(jt)
     elif entity_type == "segment_work":
         out = fetch_segment_out(db, entity_id)
+    elif entity_type == "structure":
+        out = fetch_structure_out(db, entity_id)
+    elif entity_type == "inspection_form":
+        out = fetch_inspection_form_out(db, entity_id)
+    elif entity_type == "inspection":
+        out = fetch_inspection_out(db, entity_id)
     elif entity_type == "project":
         project = db.get(Project, entity_id)
         gone = project is None or project.deleted_at is not None
@@ -210,6 +222,23 @@ def get_snapshot(
             SegmentWorkRecord.project_id == proj.id, SegmentWorkRecord.deleted_at.is_(None)
         )
     )
+    structure_rows = db.scalars(
+        select(Structure.id).where(
+            Structure.organisation_id == membership.organisation_id,
+            Structure.deleted_at.is_(None),
+        )
+    )
+    form_rows = db.scalars(
+        select(InspectionForm.id).where(
+            InspectionForm.organisation_id == membership.organisation_id,
+            InspectionForm.deleted_at.is_(None),
+        )
+    )
+    inspection_rows = db.scalars(
+        select(Inspection.id).where(
+            Inspection.project_id == proj.id, Inspection.deleted_at.is_(None)
+        )
+    )
 
     high_seq = db.scalar(
         select(func.coalesce(func.max(ChangeLog.server_seq), 0)).where(
@@ -226,5 +255,14 @@ def get_snapshot(
         messages=[MessageOut.model_validate(m) for m in msgs],
         job_types=[JobTypeOut.model_validate(j) for j in job_types],
         segment_work=[s for sid in segment_rows if (s := fetch_segment_out(db, sid)) is not None],
+        structures=[
+            s for sid in structure_rows if (s := fetch_structure_out(db, sid)) is not None
+        ],
+        inspection_forms=[
+            f for fid in form_rows if (f := fetch_inspection_form_out(db, fid)) is not None
+        ],
+        inspections=[
+            i for iid in inspection_rows if (i := fetch_inspection_out(db, iid)) is not None
+        ],
         high_seq=high_seq or 0,
     )
