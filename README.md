@@ -9,7 +9,10 @@ Modelled on [Trail Sentinel](https://trail-sentinel.com)'s feature set, with a
 work-quantification model it doesn't have (measured segments → productivity
 rates). Full plan: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md).
 
-> Status: **Phase 0** — identity + workspace core (backend + Android shell).
+> Status: **Phases 0–6 shipped** — backend + Android field app + web console
+> (server-rendered dashboard/exports and a React + MapLibre map console).
+> Deployed at `trailkeeper.asnidev.com`. Remaining: P3 GPX recording, P7
+> hardening. See [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md) §15.
 
 ## Layout
 
