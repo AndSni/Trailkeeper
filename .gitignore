@@ -17,6 +17,12 @@ backend/.env
 # Uploaded task photos (local-disk storage - see docs/BLUEPRINT.md sec 16)
 backend/data/
 
+# --- Web console (React/Vite) ---
+console/node_modules/
+console/dist/
+# Built bundle is a deploy artifact (rebuilt by scripts/deploy_backend.sh)
+backend/app/web/static/console/
+
 # --- Android ---
 *.iml
 .gradle/

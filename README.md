@@ -15,7 +15,8 @@ rates). Full plan: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md).
 
 | Path | What |
 |------|------|
-| `backend/` | FastAPI + SQLAlchemy 2.0 + Alembic API (Python 3.12+) |
+| `backend/` | FastAPI + SQLAlchemy 2.0 + Alembic API + server-rendered console (Python 3.12+) |
+| `console/` | React + Vite + MapLibre GL JS map console — built into `backend/app/web/static/console/` (deploy artifact, gitignored) |
 | `android/` | Kotlin / Jetpack Compose field app — Gradle setup, theme and `ApiClient` probe reused from SharpRight (`com.asnidev.trailkeeper`) |
 | `docs/` | Product & technical blueprint |
 
@@ -251,10 +252,30 @@ same domain. The browser session is the refresh-token JWT in an HttpOnly
   sheet per dataset via `openpyxl`), and `/app/export/photos.zip` (a
   project's task photos + a `manifest.csv`). Project-scoped datasets follow
   the dashboard's `?project=` selection; computed live, no caching
-- Not yet: cached aggregates, PDF export (`WeasyPrint` - needs cairo/pango
-  on the host), the React + MapLibre GL JS map console
-  (`docs/BLUEPRINT.md` sec 11). Console-form CSRF protection currently
-  relies on the `SameSite=Lax` session cookie
+- Console-form CSRF protection currently relies on the `SameSite=Lax`
+  session cookie
+
+## What Phase 6 covers so far - React map console (`/console/`)
+
+A React + Vite + MapLibre GL JS single-page app in [`console/`](console/),
+built into `backend/app/web/static/console/` and served by the same FastAPI
+app at `/console/`. It's a **deploy artifact** - gitignored, rebuilt by
+`scripts/deploy_backend.sh` (and CI) via `npm ci && npm run build`; a fresh
+checkout has no `/console/` until you build it.
+
+- Own JWT login against `/auth/login` (access in memory, refresh in
+  `localStorage`, auto-retry once on 401)
+- Project switcher → `GET /sync/snapshot`; MapLibre map (OpenFreeMap
+  "liberty") with trail lines, task points and structure points, camera
+  auto-fit
+- Side panel: Tasks / Trails / Structures lists; click a row to fly the map
+  to it. Read-only for now - CRUD from the browser is the next slice
+- Dev: `cd console && npm install && npm run dev` (proxies the API to
+  `127.0.0.1:9110`)
+
+- Not yet: browser CRUD, cached dashboard aggregates, PDF export
+  (`WeasyPrint` - needs cairo/pango on the host). See `docs/BLUEPRINT.md`
+  sec 11
 
 ## Roadmap
 

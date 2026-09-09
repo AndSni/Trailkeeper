@@ -1,0 +1,116 @@
+import { useEffect, useRef } from "react";
+import maplibregl from "maplibre-gl";
+import type { Snapshot } from "./api";
+import { boundsOf, structureFC, taskFC, trailFC } from "./geo";
+import type { Bounds } from "./geo";
+
+const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+
+export interface FocusTarget {
+  bounds?: Bounds;
+  center?: [number, number];
+  nonce: number;
+}
+
+export function MapView({
+  snapshot,
+  focus,
+}: {
+  snapshot: Snapshot | null;
+  focus: FocusTarget | null;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const readyRef = useRef(false);
+  const fittedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: STYLE_URL,
+      center: [24.6, 56.95],
+      zoom: 6,
+    });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    mapRef.current = map;
+
+    map.on("load", () => {
+      const empty = { type: "FeatureCollection" as const, features: [] };
+      map.addSource("tk-trails", { type: "geojson", data: empty });
+      map.addSource("tk-tasks", { type: "geojson", data: empty });
+      map.addSource("tk-structures", { type: "geojson", data: empty });
+      map.addLayer({
+        id: "tk-trails-line",
+        type: "line",
+        source: "tk-trails",
+        paint: { "line-color": "#3c5a31", "line-width": 3 },
+        layout: { "line-cap": "round", "line-join": "round" },
+      });
+      map.addLayer({
+        id: "tk-structures-dot",
+        type: "circle",
+        source: "tk-structures",
+        paint: {
+          "circle-radius": 6,
+          "circle-color": "#2f6d7a",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#fff",
+        },
+      });
+      map.addLayer({
+        id: "tk-tasks-dot",
+        type: "circle",
+        source: "tk-tasks",
+        paint: {
+          "circle-radius": 6,
+          "circle-color": "#d6a64b",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#fff",
+        },
+      });
+      readyRef.current = true;
+      pushData();
+    });
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      readyRef.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function pushData() {
+    const map = mapRef.current;
+    if (!map || !readyRef.current || !snapshot) return;
+    (map.getSource("tk-trails") as maplibregl.GeoJSONSource)?.setData(trailFC(snapshot) as never);
+    (map.getSource("tk-tasks") as maplibregl.GeoJSONSource)?.setData(taskFC(snapshot) as never);
+    (map.getSource("tk-structures") as maplibregl.GeoJSONSource)?.setData(
+      structureFC(snapshot) as never,
+    );
+
+    if (fittedRef.current !== snapshot.project.id) {
+      const b = boundsOf([
+        ...snapshot.trails.map((t) => t.geometry),
+        ...snapshot.tasks.map((t) => t.geometry),
+        ...snapshot.structures.map((s) => s.geometry),
+      ]);
+      if (b) {
+        map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 600 });
+        fittedRef.current = snapshot.project.id;
+      }
+    }
+  }
+
+  useEffect(pushData, [snapshot]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focus) return;
+    if (focus.bounds) map.fitBounds(focus.bounds, { padding: 80, maxZoom: 16, duration: 600 });
+    else if (focus.center) map.flyTo({ center: focus.center, zoom: 16, duration: 600 });
+  }, [focus]);
+
+  return <div className="map" ref={containerRef} />;
+}

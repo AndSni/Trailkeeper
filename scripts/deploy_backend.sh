@@ -24,6 +24,17 @@ fail() { echo "  [FAIL] $1"; }
 
 command -v rsync >/dev/null 2>&1 || { fail "rsync not found on PATH"; exit 1; }
 
+CONSOLE_DIR="$PROJECT_ROOT/console"
+if [ -f "$CONSOLE_DIR/package.json" ]; then
+    if command -v npm >/dev/null 2>&1; then
+        echo "Building the React console (console/ -> backend/app/web/static/console/) ..."
+        ( cd "$CONSOLE_DIR" && npm ci --silent && npm run build --silent )
+        ok "Console built"
+    else
+        fail "npm not found - skipping console build (the deployed /console/ will be stale)"
+    fi
+fi
+
 echo "Syncing backend/ to $REMOTE_HOST:$REMOTE_DIR ..."
 ssh "$REMOTE_HOST" "mkdir -p $REMOTE_DIR"
 rsync -az --delete \
@@ -35,6 +46,7 @@ rsync -az --delete \
     --exclude '.ruff_cache/' \
     --exclude '*.log' \
     --exclude '.env' \
+    --exclude 'data/' \
     "$BACKEND_DIR/" "$REMOTE_HOST:$REMOTE_DIR/"
 ok "Files synced"
 

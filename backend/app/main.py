@@ -1,8 +1,10 @@
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.routes import (
@@ -62,6 +64,15 @@ app.include_router(console.router)
 @app.exception_handler(console.NeedsLogin)
 def _needs_login_redirect(request: Request, exc: console.NeedsLogin) -> RedirectResponse:
     return RedirectResponse("/login", status_code=303)
+
+
+# The React map console (console/ built by Vite → here). It's a deploy
+# artifact, not committed; absent in a fresh checkout until `npm run build`.
+_console_spa = Path(__file__).parent / "web" / "static" / "console"
+if (_console_spa / "index.html").is_file():
+    app.mount(
+        "/console", StaticFiles(directory=_console_spa, html=True), name="console-spa"
+    )
 
 
 @app.get("/health", tags=["meta"])
