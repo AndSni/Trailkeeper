@@ -42,7 +42,62 @@ function AuthImg({
   return <img src={src} alt={alt} className={className} onClick={onClick} />;
 }
 
-export function PhotoGallery({ photos }: { photos: TaskPhoto[] }) {
+function PhotoCard({
+  photo,
+  busy,
+  onZoom,
+  onDelete,
+}: {
+  photo: TaskPhoto;
+  busy: boolean;
+  onZoom: () => void;
+  onDelete: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <div className="photo-card">
+      <AuthImg
+        path={photo.url}
+        alt={photo.caption || "Task photo"}
+        className="photo-thumb"
+        onClick={onZoom}
+      />
+      {confirming ? (
+        <div className="photo-confirm">
+          <span>Delete photo?</span>
+          <button
+            className="danger"
+            disabled={busy}
+            onClick={() => {
+              setConfirming(false);
+              onDelete();
+            }}
+          >
+            Yes
+          </button>
+          <button className="ghost" disabled={busy} onClick={() => setConfirming(false)}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button className="ghost photo-del" disabled={busy} onClick={() => setConfirming(true)}>
+          Delete
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function PhotoGallery({
+  photos,
+  busy = false,
+  onDelete,
+}: {
+  photos: TaskPhoto[];
+  busy?: boolean;
+  onDelete?: (photoId: string) => void;
+}) {
   const [zoom, setZoom] = useState<TaskPhoto | null>(null);
   if (!photos.length) return null;
 
@@ -51,12 +106,12 @@ export function PhotoGallery({ photos }: { photos: TaskPhoto[] }) {
       <label>Photos ({photos.length})</label>
       <div className="photo-strip">
         {photos.map((p) => (
-          <AuthImg
+          <PhotoCard
             key={p.id}
-            path={p.url}
-            alt={p.caption || "Task photo"}
-            className="photo-thumb"
-            onClick={() => setZoom(p)}
+            photo={p}
+            busy={busy}
+            onZoom={() => setZoom(p)}
+            onDelete={() => onDelete?.(p.id)}
           />
         ))}
       </div>

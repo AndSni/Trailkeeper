@@ -8,6 +8,7 @@ import {
   deleteMessage,
   deleteStructure,
   deleteTask,
+  deleteTaskPhoto,
   deleteTrail,
   deleteTrack,
   downloadGpx,
@@ -339,6 +340,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                 run(() => postMessage({ project_id: projectId, task_id: selectedRow.id, body }))
               }
               onDeleteComment={(id) => run(() => deleteMessage(id))}
+              onDeletePhoto={(photoId) => run(() => deleteTaskPhoto(selectedRow.id, photoId))}
             />
           ) : !snapshot ? (
             <div className="empty">Loading…</div>
@@ -528,6 +530,7 @@ function Detail({
   onDelete,
   onPostComment,
   onDeleteComment,
+  onDeletePhoto,
 }: {
   tab: Tab;
   row: { id: string; name: string };
@@ -540,6 +543,7 @@ function Detail({
   onDelete: () => void;
   onPostComment: (body: string) => void;
   onDeleteComment: (id: string) => void;
+  onDeletePhoto: (photoId: string) => void;
 }) {
   const task = tab === "tasks" ? snapshot.tasks.find((t) => t.id === row.id) : null;
   const structure = tab === "structures" ? snapshot.structures.find((s) => s.id === row.id) : null;
@@ -641,7 +645,7 @@ function Detail({
         <button className="danger" disabled={busy} onClick={onDelete}>Delete</button>
       </div>
 
-      {task && <PhotoGallery photos={task.photos} />}
+      {task && <PhotoGallery photos={task.photos} busy={busy} onDelete={onDeletePhoto} />}
 
       {task && (
         <div style={{ marginTop: 16 }}>

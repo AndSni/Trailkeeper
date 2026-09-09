@@ -4,8 +4,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,12 +21,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -53,6 +57,7 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 data class TaskPhotoRef(val id: String = "", val caption: String = "", val url: String = "")
 
@@ -73,6 +78,7 @@ fun TaskPhotoStrip(
     val scope = rememberCoroutineScope()
     val photos = remember(task.photosJson) { parseTaskPhotos(task.photosJson) }
     var working by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<TaskPhotoRef?>(null) }
 
     val picker =
         rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -90,6 +96,11 @@ fun TaskPhotoStrip(
         }
 
     Text("Photos (${photos.size})", style = MaterialTheme.typography.labelLarge)
+    Text(
+        "Tap to view · hold to delete",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             OutlinedButton(
@@ -107,30 +118,52 @@ fun TaskPhotoStrip(
         }
         items(photos, key = { it.id }) { p ->
             val url = ApiClient.absoluteUrl(p.url)
-            Box {
-                AsyncImage(
-                    model = url,
-                    contentDescription = p.caption,
-                    contentScale = ContentScale.Crop,
-                    modifier =
-                        Modifier.size(96.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { url?.let(onOpen) },
-                )
-                IconButton(
-                    onClick = { onDelete(p.id) },
-                    modifier = Modifier.align(Alignment.TopEnd).size(28.dp),
-                ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "Delete photo",
-                        tint = Color.White,
-                        modifier =
-                            Modifier.background(Color(0x99000000), RoundedCornerShape(50)).padding(2.dp),
-                    )
-                }
-            }
+            AsyncImage(
+                model = url,
+                contentDescription = p.caption,
+                contentScale = ContentScale.Crop,
+                modifier =
+                    Modifier.size(96.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .pointerInput(p.id) {
+                            awaitEachGesture {
+                                awaitFirstDown()
+                                var released = false
+                                val heldFull =
+                                    withTimeoutOrNull(1_000L) {
+                                        released = waitForUpOrCancellation() != null
+                                        true
+                                    } == null
+                                when {
+                                    heldFull -> {
+                                        pendingDelete = p
+                                        waitForUpOrCancellation()
+                                    }
+                                    released -> url?.let(onOpen)
+                                }
+                            }
+                        },
+            )
         }
+    }
+
+    pendingDelete?.let { photo ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete photo?") },
+            text = { Text("This removes the photo for everyone. It can't be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete(photo.id)
+                        pendingDelete = null
+                    }
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+        )
     }
 }
 

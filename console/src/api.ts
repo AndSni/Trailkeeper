@@ -251,6 +251,9 @@ export const postMessage = (body: { project_id: string; task_id?: string | null;
 
 export const deleteMessage = (id: string) => apiVoid(`/messages/${id}`, { method: "DELETE" });
 
+export const deleteTaskPhoto = (taskId: string, photoId: string) =>
+  apiVoid(`/tasks/${taskId}/photos/${photoId}`, { method: "DELETE" });
+
 export async function importGpx(projectId: string, file: File): Promise<Track[]> {
   const form = new FormData();
   form.append("file", file);

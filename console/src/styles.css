@@ -98,11 +98,17 @@ button.danger { background: var(--danger); color: #fff; }
 .modal select { width: 100%; font: inherit; padding: 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
 
 /* Task photos */
-.photo-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.photo-strip { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+.photo-card { display: flex; flex-direction: column; gap: 4px; align-items: stretch; width: 96px; }
 .photo-thumb {
   width: 96px; height: 96px; object-fit: cover; border-radius: 8px;
   border: 1px solid var(--line); cursor: zoom-in; background: var(--bg);
 }
+.photo-del { font-size: 12px; padding: 3px 6px; }
+.photo-confirm {
+  display: flex; flex-direction: column; gap: 3px; font-size: 11px; text-align: center;
+}
+.photo-confirm button { font-size: 11px; padding: 2px 4px; }
 .photo-loading {
   width: 96px; height: 96px; border-radius: 8px; border: 1px solid var(--line);
   background: var(--line); display: inline-block; animation: photo-pulse 1.2s ease-in-out infinite;
