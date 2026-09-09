@@ -15,6 +15,7 @@ data class ProjectsUiState(
     val projects: List<ProjectDto> = emptyList(),
     val error: String? = null,
     val creating: Boolean = false,
+    val offline: Boolean = false,
 )
 
 class ProjectListViewModel : ViewModel() {
@@ -29,9 +30,18 @@ class ProjectListViewModel : ViewModel() {
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             runCatching { ProjectsRepository.list() }
-                .onSuccess { list -> _state.update { it.copy(loading = false, projects = list) } }
+                .onSuccess { list ->
+                    _state.update { it.copy(loading = false, projects = list, offline = false) }
+                }
                 .onFailure { e ->
-                    _state.update { it.copy(loading = false, error = e.message ?: "Failed to load") }
+                    val cached = runCatching { ProjectsRepository.cachedList() }.getOrDefault(emptyList())
+                    _state.update {
+                        if (cached.isNotEmpty()) {
+                            it.copy(loading = false, projects = cached, offline = true, error = null)
+                        } else {
+                            it.copy(loading = false, error = e.message ?: "Failed to load")
+                        }
+                    }
                 }
         }
     }

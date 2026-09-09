@@ -174,6 +174,15 @@ Android Room outbox). This slice is the backend the field app pulls from.
   distance / point count / date. GPX *export from the app* and drawing a
   recorded route on the map are later slices
 
+## Phase 7 (hardening) so far
+
+- **Offline login** - the last successful `/auth/me` is cached
+  (`IdentityStore`); at startup a network error keeps the session alive from
+  that cache instead of bouncing to the login screen, so the field app opens
+  with no signal. A real 401/403 still clears everything
+- **Offline project list** - if `GET /projects` fails, the list falls back to
+  the projects already in Room (those opened before) with an "offline" note
+
 ## What Phase 2 covers (backend)
 
 - **Discussion** - the project's own thread + one per task (`task_id` null vs

@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.asnidev.trailkeeper.data.IdentityStore
 import com.asnidev.trailkeeper.data.Session
 import com.asnidev.trailkeeper.data.TokenStore
 import com.asnidev.trailkeeper.data.local.TrailkeeperDb
@@ -16,6 +17,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         MapLibre.getInstance(applicationContext)
         TokenStore.init(applicationContext)
+        IdentityStore.init(applicationContext)
         TrailkeeperDb.init(applicationContext)
         Session.start()
 

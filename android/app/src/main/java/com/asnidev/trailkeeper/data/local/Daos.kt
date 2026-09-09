@@ -13,6 +13,9 @@ interface ProjectDao {
 
     @Query("SELECT * FROM projects WHERE id = :id") fun observe(id: String): Flow<ProjectEntity?>
 
+    @Query("SELECT * FROM projects WHERE organisationId = :orgId ORDER BY name")
+    suspend fun listForOrg(orgId: String): List<ProjectEntity>
+
     @Query("DELETE FROM projects WHERE id = :id") suspend fun deleteById(id: String)
 }
 

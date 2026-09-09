@@ -27,6 +27,16 @@ fun ProjectDto.toEntity() =
         status = status,
     )
 
+fun ProjectEntity.toDto() =
+    ProjectDto(
+        id = id,
+        organisationId = organisationId,
+        name = name,
+        description = description,
+        activity = activity,
+        status = status,
+    )
+
 fun TrailDto.toEntity() =
     TrailEntity(
         id = id,

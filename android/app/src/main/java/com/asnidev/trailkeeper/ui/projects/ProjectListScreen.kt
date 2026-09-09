@@ -102,6 +102,15 @@ fun ProjectListScreen(
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
+                        if (s.offline) {
+                            item {
+                                Text(
+                                    "Offline — showing projects from your last sync.",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                         items(s.projects, key = { it.id }) { p ->
                             Card(
                                 Modifier.fillMaxWidth().clickable { onOpenProject(p.id, p.name) }
