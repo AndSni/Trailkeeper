@@ -395,6 +395,18 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
           picking={picking}
           draft={mode.kind === "draw-trail" || mode.kind === "form-trail" ? draft : null}
           onPick={onPick}
+          onFeatureClick={(kind, id) => {
+            const t: Tab =
+              kind === "structure"
+                ? "structures"
+                : kind === "trail"
+                  ? "trails"
+                  : kind === "track"
+                    ? "tracks"
+                    : "tasks";
+            setTab(t);
+            setSelected(kind === "track" ? null : id);
+          }}
         />
       </div>
 

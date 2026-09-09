@@ -13,18 +13,22 @@ export interface FocusTarget {
   nonce: number;
 }
 
+const HIT_LAYERS = ["tk-tasks-dot", "tk-structures-dot", "tk-trails-line", "tk-tracks-line"];
+
 export function MapView({
   snapshot,
   focus,
   picking = false,
   draft = null,
   onPick,
+  onFeatureClick,
 }: {
   snapshot: Snapshot | null;
   focus: FocusTarget | null;
   picking?: boolean;
   draft?: [number, number][] | null; // [lng, lat] vertices being drawn
   onPick?: (lngLat: [number, number]) => void;
+  onFeatureClick?: (kind: string, id: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -32,6 +36,10 @@ export function MapView({
   const fittedRef = useRef<string | null>(null);
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
+  const onFeatureClickRef = useRef(onFeatureClick);
+  onFeatureClickRef.current = onFeatureClick;
+  const pickingRef = useRef(picking);
+  pickingRef.current = picking;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -42,7 +50,30 @@ export function MapView({
       zoom: 6,
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    map.on("click", (e) => onPickRef.current?.([e.lngLat.lng, e.lngLat.lat]));
+    map.on("click", (e) => {
+      // While placing/drawing a point, a click always feeds onPick.
+      if (!pickingRef.current) {
+        const hit = map
+          .queryRenderedFeatures(e.point, { layers: HIT_LAYERS })
+          .find((f) => f.properties?.id && f.properties?.kind);
+        if (hit) {
+          onFeatureClickRef.current?.(
+            String(hit.properties!.kind),
+            String(hit.properties!.id),
+          );
+          return;
+        }
+      }
+      onPickRef.current?.([e.lngLat.lng, e.lngLat.lat]);
+    });
+    for (const layer of HIT_LAYERS) {
+      map.on("mouseenter", layer, () => {
+        if (!pickingRef.current) map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", layer, () => {
+        if (!pickingRef.current) map.getCanvas().style.cursor = "";
+      });
+    }
     mapRef.current = map;
 
     map.on("load", () => {
