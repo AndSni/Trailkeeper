@@ -223,6 +223,12 @@ The feature nothing off-the-shelf has (`docs/BLUEPRINT.md` §10).
 
 ## What Phase 4 covers (Android) - the timer
 
+> Update: the stop form now has **"Measure on map"** for `km` / `m` / `m²`
+> job types - a full-screen `SegmentMeasureScreen` where you tap the map to
+> trace the worked line (or area). It sends the GeoJSON with
+> `quantity_source="measured"` and the server derives the quantity via
+> `ST_Length` / `ST_Area`; the on-screen number is a client-side estimate.
+
 - **Work tab** on the project screen - an on-phone stopwatch: pick a job type,
   Start / Pause / Resume / Stop. Un-paused seconds are the "active" time;
   pause spans are kept and sent with the record

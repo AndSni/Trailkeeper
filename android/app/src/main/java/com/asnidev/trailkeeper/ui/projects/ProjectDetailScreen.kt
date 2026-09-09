@@ -121,7 +121,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
     val requestNotifications =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(tab) {
-        if ((tab == 2 || tab == 5 || tab == 6) && !hasLocation) {
+        if ((tab == 2 || tab == 4 || tab == 5 || tab == 6) && !hasLocation) {
             requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
         if (tab == 6 && android.os.Build.VERSION.SDK_INT >= 33) {
@@ -194,7 +194,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                             modifier = Modifier.fillMaxSize(),
                         )
                     tab == 3 -> DiscussionTab(messages, onSend = vm::postMessage)
-                    tab == 4 -> SegmentWorkTab(workVm, s.trails)
+                    tab == 4 -> SegmentWorkTab(workVm, s.trails, hasLocation)
                     tab == 5 -> StructuresTab(structuresVm, hasLocation)
                     else ->
                         RouteTab(

@@ -47,7 +47,7 @@ import com.asnidev.trailkeeper.network.RollupGroupDto
 private val GROUP_BYS = listOf("job_type" to "Job type", "trail" to "Trail", "member" to "Member", "week" to "Week")
 
 @Composable
-fun SegmentWorkTab(vm: SegmentWorkViewModel, trails: List<TrailEntity>) {
+fun SegmentWorkTab(vm: SegmentWorkViewModel, trails: List<TrailEntity>, hasLocation: Boolean) {
     val jobTypes by vm.jobTypes.collectAsState()
     val timer by vm.timer.collectAsState()
     val records by vm.records.collectAsState()
@@ -55,8 +55,23 @@ fun SegmentWorkTab(vm: SegmentWorkViewModel, trails: List<TrailEntity>) {
     val groupBy by vm.rollupGroupBy.collectAsState()
     val saving by vm.saving.collectAsState()
     val message by vm.message.collectAsState()
+    var measuring by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { vm.loadRollup() }
+
+    if (measuring) {
+        val unit = jobTypes.firstOrNull { it.id == timer.jobTypeId }?.unit ?: ""
+        SegmentMeasureScreen(
+            area = unit == "m2",
+            hasLocation = hasLocation,
+            onDone = { pts ->
+                vm.setMeasurement(pts, area = unit == "m2")
+                measuring = false
+            },
+            onCancel = { measuring = false },
+        )
+        return
+    }
 
     Column(Modifier.fillMaxSize()) {
         message?.let {
@@ -92,7 +107,7 @@ fun SegmentWorkTab(vm: SegmentWorkViewModel, trails: List<TrailEntity>) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { TimerCard(vm, timer, jobTypes, trails, saving) }
+            item { TimerCard(vm, timer, jobTypes, trails, saving, onMeasure = { measuring = true }) }
             item { HorizontalDivider() }
             item { InsightsSection(rollup?.groups ?: emptyList(), groupBy, onGroupBy = vm::loadRollup) }
             if (records.isNotEmpty()) {
@@ -116,6 +131,7 @@ private fun TimerCard(
     jobTypes: List<com.asnidev.trailkeeper.data.local.JobTypeEntity>,
     trails: List<TrailEntity>,
     saving: Boolean,
+    onMeasure: () -> Unit,
 ) {
     val selected = jobTypes.firstOrNull { it.id == timer.jobTypeId }
     var menuOpen by remember { mutableStateOf(false) }
@@ -165,7 +181,7 @@ private fun TimerCard(
             }
 
             if (timer.phase == TimerPhase.STOPPED) {
-                SaveForm(vm, selected, trails, timer.activeSeconds, saving)
+                SaveForm(vm, selected, trails, timer.activeSeconds, saving, onMeasure)
             }
         }
     }
@@ -179,8 +195,12 @@ private fun SaveForm(
     trails: List<TrailEntity>,
     activeSeconds: Long,
     saving: Boolean,
+    onMeasure: () -> Unit,
 ) {
     val unit = jobType?.unit ?: ""
+    val canMeasure = unit == "km" || unit == "m" || unit == "m2"
+    val measuredPreview by vm.measuredPreview.collectAsState()
+    val measured = measuredPreview != null
     var qty by remember {
         mutableStateOf(
             if (unit == "hours") ((activeSeconds / 360).toInt() / 10.0).toString() else ""
@@ -195,14 +215,32 @@ private fun SaveForm(
     HorizontalDivider()
     Text("Stopped · log the work", style = MaterialTheme.typography.titleSmall)
 
-    OutlinedTextField(
-        value = qty,
-        onValueChange = { qty = it },
-        label = { Text(if (unit.isBlank()) "Quantity" else "Quantity ($unit)") },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        modifier = Modifier.fillMaxWidth(),
-    )
+    if (canMeasure) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onMeasure) {
+                Text(if (measured) "Re-measure on map" else "Measure on map")
+            }
+            if (measured) {
+                Text(
+                    if (unit == "m2") "≈ ${measuredPreview!!.toInt()} m² (server confirms)"
+                    else "≈ %.2f km (server confirms)".format(measuredPreview),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = vm::clearMeasurement) { Text("Clear") }
+            }
+        }
+    }
+
+    if (!measured) {
+        OutlinedTextField(
+            value = qty,
+            onValueChange = { qty = it },
+            label = { Text(if (unit.isBlank()) "Quantity" else "Quantity ($unit)") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
     OutlinedTextField(
         value = crew,
         onValueChange = { crew = it.filter(Char::isDigit) },
@@ -263,7 +301,7 @@ private fun SaveForm(
                     trailId = trailId,
                 )
             },
-            enabled = !saving && qtyValue != null && qtyValue > 0,
+            enabled = !saving && (measured || (qtyValue != null && qtyValue > 0)),
         ) {
             if (saving) CircularProgressIndicator(Modifier.size(16.dp)) else Text("Save")
         }

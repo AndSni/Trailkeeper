@@ -7,7 +7,14 @@ import com.asnidev.trailkeeper.data.local.JobTypeEntity
 import com.asnidev.trailkeeper.data.local.TrailkeeperDb
 import com.asnidev.trailkeeper.network.RollupDto
 import com.asnidev.trailkeeper.network.SegmentWorkCreateRequest
+import com.google.gson.JsonElement
+import com.google.gson.JsonParser
 import java.time.Instant
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -86,6 +93,35 @@ class SegmentWorkViewModel(private val projectId: String) : ViewModel() {
     private val _saving = MutableStateFlow(false)
     val saving: StateFlow<Boolean> = _saving.asStateFlow()
 
+    /** A measured geometry captured on the map, and its client-side preview
+     * (km for line units, m² for area units). Null = fall back to a manual
+     * quantity. Cleared by [discard] / [clearMeasurement]. */
+    private val _measuredGeometry = MutableStateFlow<JsonElement?>(null)
+    val measuredGeometry: StateFlow<JsonElement?> = _measuredGeometry.asStateFlow()
+
+    private val _measuredPreview = MutableStateFlow<Double?>(null)
+    val measuredPreview: StateFlow<Double?> = _measuredPreview.asStateFlow()
+
+    fun setMeasurement(points: List<Pair<Double, Double>>, area: Boolean) {
+        if (points.size < 2) {
+            clearMeasurement()
+            return
+        }
+        val ring = if (area) points + points.first() else points
+        val coords = ring.joinToString(",") { (lat, lon) -> "[$lon,$lat]" }
+        val json =
+            if (area) """{"type":"Polygon","coordinates":[[$coords]]}"""
+            else """{"type":"LineString","coordinates":[$coords]}"""
+        _measuredGeometry.value = JsonParser.parseString(json)
+        _measuredPreview.value =
+            if (area) polygonAreaM2(points) else lineLengthKm(points)
+    }
+
+    fun clearMeasurement() {
+        _measuredGeometry.value = null
+        _measuredPreview.value = null
+    }
+
     val rollup = MutableStateFlow<RollupDto?>(null)
     val rollupGroupBy = MutableStateFlow("job_type")
 
@@ -142,6 +178,7 @@ class SegmentWorkViewModel(private val projectId: String) : ViewModel() {
 
     fun discard() {
         ticker?.cancel()
+        clearMeasurement()
         _timer.value = TimerState()
     }
 
@@ -155,6 +192,7 @@ class SegmentWorkViewModel(private val projectId: String) : ViewModel() {
         val st = _timer.value
         val jt = st.jobTypeId ?: return
         val startIso = startedAtIso ?: return
+        val geometry = _measuredGeometry.value
         _saving.value = true
         viewModelScope.launch {
             runCatching {
@@ -163,8 +201,9 @@ class SegmentWorkViewModel(private val projectId: String) : ViewModel() {
                         projectId = projectId,
                         jobTypeId = jt,
                         trailId = trailId,
-                        quantity = quantity,
-                        quantitySource = "manual",
+                        geometry = geometry,
+                        quantity = if (geometry != null) null else quantity,
+                        quantitySource = if (geometry != null) "measured" else "manual",
                         startedAt = startIso,
                         endedAt = Instant.now().toString(),
                         activeSeconds = st.activeSeconds.toInt(),
@@ -196,6 +235,37 @@ class SegmentWorkViewModel(private val projectId: String) : ViewModel() {
 
     private fun computeActive(): Long =
         ((System.currentTimeMillis() - startEpoch - pausedAccumMs) / 1000).coerceAtLeast(0)
+
+    private fun lineLengthKm(points: List<Pair<Double, Double>>): Double {
+        val r = 6_371_000.0
+        var m = 0.0
+        for (i in 1 until points.size) {
+            val (la1, lo1) = points[i - 1]
+            val (la2, lo2) = points[i]
+            val dLat = Math.toRadians(la2 - la1)
+            val dLon = Math.toRadians(lo2 - lo1)
+            val a =
+                sin(dLat / 2) * sin(dLat / 2) +
+                    cos(Math.toRadians(la1)) * cos(Math.toRadians(la2)) * sin(dLon / 2) * sin(dLon / 2)
+            m += r * 2 * atan2(sqrt(a), sqrt(1 - a))
+        }
+        return m / 1000.0
+    }
+
+    private fun polygonAreaM2(points: List<Pair<Double, Double>>): Double {
+        // Shoelace on a local equirectangular projection about the centroid.
+        val lat0 = points.sumOf { it.first } / points.size
+        val mPerDegLat = 111_320.0
+        val mPerDegLon = 111_320.0 * cos(Math.toRadians(lat0))
+        val xy = points.map { (la, lo) -> lo * mPerDegLon to la * mPerDegLat }
+        var s = 0.0
+        for (i in xy.indices) {
+            val (x1, y1) = xy[i]
+            val (x2, y2) = xy[(i + 1) % xy.size]
+            s += x1 * y2 - x2 * y1
+        }
+        return abs(s) / 2.0
+    }
 
     private fun launchTicker() {
         ticker?.cancel()

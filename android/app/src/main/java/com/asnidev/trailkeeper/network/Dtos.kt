@@ -272,6 +272,7 @@ data class SegmentWorkCreateRequest(
     @SerializedName("project_id") val projectId: String,
     @SerializedName("job_type_id") val jobTypeId: String,
     @SerializedName("trail_id") val trailId: String? = null,
+    val geometry: JsonElement? = null, // GeoJSON LineString / Polygon when measured
     val quantity: Double?,
     @SerializedName("quantity_source") val quantitySource: String = "manual",
     @SerializedName("started_at") val startedAt: String,
