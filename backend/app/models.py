@@ -693,6 +693,8 @@ class Structure(Base, TimestampMixin):
         ForeignKey("trails.id", ondelete="SET NULL"), nullable=True
     )
     material: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    # Map marker colour, "#rrggbb" or "" for the client default.
+    color: Mapped[str] = mapped_column(String(16), default="", nullable=False)
     installed_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     # For the future `inspection_due` scheduler (BLUEPRINT sec 12); null = no
     # routine interval.

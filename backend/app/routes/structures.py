@@ -43,6 +43,7 @@ def _out(structure: Structure, geojson: str | None) -> StructureOut:
         geometry=to_geojson(geojson),
         nearest_trail_id=structure.nearest_trail_id,
         material=structure.material,
+        color=structure.color,
         installed_on=structure.installed_on,
         inspection_interval_days=structure.inspection_interval_days,
         notes=structure.notes,
@@ -115,6 +116,7 @@ def create_structure(
         geom=geom,
         nearest_trail_id=nearest_trail_id,
         material=body.material,
+        color=body.color,
         installed_on=body.installed_on,
         inspection_interval_days=body.inspection_interval_days,
         notes=body.notes,
@@ -156,6 +158,8 @@ def update_structure(
         structure.status = body.status.value
     if body.material is not None:
         structure.material = body.material
+    if body.color is not None:
+        structure.color = body.color
     if body.installed_on is not None:
         structure.installed_on = body.installed_on
     if body.inspection_interval_days is not None:

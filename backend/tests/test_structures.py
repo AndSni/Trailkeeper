@@ -57,16 +57,18 @@ def test_patch_and_soft_delete(client, owner):
     sid = client.post(
         "/structures",
         headers=owner["headers"],
-        json={"name": "Sign 4", "structure_type": "sign"},
+        json={"name": "Sign 4", "structure_type": "sign", "color": "#B7791F"},
     ).json()["id"]
 
     up = client.patch(
         f"/structures/{sid}",
         headers=owner["headers"],
-        json={"status": "needs_repair", "notes": "post rotten"},
+        json={"status": "needs_repair", "notes": "post rotten", "name": "Sign 4A", "color": "#2E7D32"},
     )
     assert up.status_code == 200
     assert up.json()["status"] == "needs_repair"
+    assert up.json()["name"] == "Sign 4A"
+    assert up.json()["color"] == "#2E7D32"
 
     assert client.delete(f"/structures/{sid}", headers=owner["headers"]).status_code == 204
     assert client.get(f"/structures/{sid}", headers=owner["headers"]).status_code == 404

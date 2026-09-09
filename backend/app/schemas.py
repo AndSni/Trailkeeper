@@ -465,6 +465,7 @@ class StructureCreateIn(BaseModel):
     lat: float | None = Field(default=None, ge=-90, le=90)
     lon: float | None = Field(default=None, ge=-180, le=180)
     material: str = Field(default="", max_length=64)
+    color: str = Field(default="", max_length=16)
     installed_on: date | None = None
     inspection_interval_days: int | None = Field(default=None, ge=1)
     notes: str = Field(default="", max_length=4000)
@@ -485,6 +486,7 @@ class StructureUpdateIn(BaseModel):
     lat: float | None = Field(default=None, ge=-90, le=90)
     lon: float | None = Field(default=None, ge=-180, le=180)
     material: str | None = Field(default=None, max_length=64)
+    color: str | None = Field(default=None, max_length=16)
     installed_on: date | None = None
     inspection_interval_days: int | None = Field(default=None, ge=1)
     notes: str | None = Field(default=None, max_length=4000)
@@ -499,6 +501,7 @@ class StructureOut(BaseModel):
     geometry: dict | None
     nearest_trail_id: uuid.UUID | None
     material: str
+    color: str
     installed_on: date | None
     inspection_interval_days: int | None
     notes: str
