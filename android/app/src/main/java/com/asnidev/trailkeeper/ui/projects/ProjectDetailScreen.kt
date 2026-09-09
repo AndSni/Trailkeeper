@@ -137,7 +137,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
     fun focusOnMap(json: String?) {
         geomLatLon(json)?.let { (lat, lon) ->
             mapFocus = MapFocus(lat, lon, System.currentTimeMillis())
-            tab = 2
+            tab = 1 // Map
         }
     }
 
@@ -154,11 +154,12 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
         }
     val requestNotifications =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    // Tab order: 0 Tasks · 1 Map · 2 Route · 3 Trails · 4 Work · 5 Structures · 6 Discussion
     LaunchedEffect(tab) {
-        if (tab in intArrayOf(1, 2, 4, 5, 6) && !hasLocation) {
+        if (tab in intArrayOf(1, 2, 3, 4, 5) && !hasLocation) {
             requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
-        if ((tab == 1 || tab == 6) && android.os.Build.VERSION.SDK_INT >= 33) {
+        if ((tab == 2 || tab == 3) && android.os.Build.VERSION.SDK_INT >= 33) {
             requestNotifications.launch("android.permission.POST_NOTIFICATIONS")
         }
     }
@@ -205,12 +206,12 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
 
             ScrollableTabRow(selectedTabIndex = tab, edgePadding = 8.dp) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Tasks") })
-                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Map") })
-                Tab(selected = tab == 6, onClick = { tab = 6 }, text = { Text("Route") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Trails") })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Map") })
+                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Route") })
+                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Trails") })
                 Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Work") })
                 Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("Structures") })
-                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Discussion") })
+                Tab(selected = tab == 6, onClick = { tab = 6 }, text = { Text("Discussion") })
             }
 
             Box(Modifier.fillMaxSize()) {
@@ -261,14 +262,6 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                             onOpen = { t -> selected = "task" to t.id; focusOnMap(t.geometryJson) },
                         )
                     tab == 1 ->
-                        TrailList(
-                            s.trails,
-                            projectId = projectId,
-                            hasLocation = hasLocation,
-                            onSaveWalkedTrail = { name -> vm.saveWalkedTrail(name, s.project?.activity ?: "mtb") },
-                            onOpen = { tr -> selected = "trail" to tr.id; focusOnMap(tr.geometryJson) },
-                        )
-                    tab == 2 ->
                         ProjectMap(
                             trails = s.trails,
                             tasks = s.tasks,
@@ -279,15 +272,27 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                             focus = mapFocus,
                             onFeatureTap = { kind, id -> selected = kind to id },
                         )
-                    tab == 3 ->
-                        DiscussionTab(messages, onSend = { vm.postMessage(it) }, onDelete = vm::deleteMessage)
-                    tab == 4 -> SegmentWorkTab(workVm, s.trails, hasLocation)
-                    tab == 5 -> StructuresTab(structuresVm, hasLocation)
-                    else ->
+                    tab == 2 ->
                         RouteTab(
                             projectId = projectId,
                             activity = s.project?.activity ?: "mtb",
                             hasLocation = hasLocation,
+                        )
+                    tab == 3 ->
+                        TrailList(
+                            s.trails,
+                            projectId = projectId,
+                            hasLocation = hasLocation,
+                            onSaveWalkedTrail = { name -> vm.saveWalkedTrail(name, s.project?.activity ?: "mtb") },
+                            onOpen = { tr -> selected = "trail" to tr.id; focusOnMap(tr.geometryJson) },
+                        )
+                    tab == 4 -> SegmentWorkTab(workVm, s.trails, hasLocation)
+                    tab == 5 -> StructuresTab(structuresVm, hasLocation)
+                    else ->
+                        DiscussionTab(
+                            messages,
+                            onSend = { vm.postMessage(it) },
+                            onDelete = vm::deleteMessage,
                         )
                 }
             }
