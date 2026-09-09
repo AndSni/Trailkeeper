@@ -171,3 +171,42 @@ def test_csv_and_xlsx_exports(client):
     assert wb["Tasks"].cell(row=1, column=1).value == "Title"
     task_titles = [row[0] for row in wb["Tasks"].iter_rows(min_row=2, values_only=True)]
     assert "Fix the berm" in task_titles
+
+
+def test_photo_zip_export(client):
+    import zipfile
+    from io import BytesIO
+
+    _register(client, email="ph@example.com")
+    tokens = client.post(
+        "/auth/login",
+        json={"email": "ph@example.com", "password": "a decent long passphrase"},
+    ).json()
+    h = {"Authorization": f"Bearer {tokens['access_token']}"}
+    pid = client.post(
+        "/projects", headers=h, json={"name": "Photo Project", "activity": "mtb"}
+    ).json()["id"]
+    task_id = client.post(
+        f"/tasks?project_id={pid}", headers=h, json={"title": "Washed-out drain"}
+    ).json()["id"]
+    up = client.post(
+        f"/tasks/{task_id}/photos",
+        headers=h,
+        files={"file": ("drain.jpg", b"\xff\xd8\xff\xe0 fake jpeg bytes", "image/jpeg")},
+        data={"caption": "inlet blocked"},
+    )
+    assert up.status_code == 201, up.text
+
+    z = client.get("/app/export/photos.zip")
+    assert z.status_code == 200
+    assert z.headers["content-type"] == "application/zip"
+    assert "attachment" in z.headers["content-disposition"]
+
+    zf = zipfile.ZipFile(BytesIO(z.content))
+    names = zf.namelist()
+    assert "manifest.csv" in names
+    images = [n for n in names if n.startswith("photos/") and n.endswith(".jpg")]
+    assert len(images) == 1
+    manifest = zf.read("manifest.csv").decode()
+    assert "inlet blocked" in manifest
+    assert "Washed-out drain" in manifest

@@ -29,7 +29,7 @@ from app.routes.org import create_invite as api_create_invite
 from app.schemas import AcceptInviteIn, InviteIn, LoginIn, RegisterIn
 from app.security import decode_token
 from app.web.dashboard import gather
-from app.web.exports import DATASETS, csv_bytes, workbook_bytes
+from app.web.exports import DATASETS, csv_bytes, photo_zip_bytes, workbook_bytes
 
 router = APIRouter(tags=["console"], include_in_schema=False)
 
@@ -350,4 +350,16 @@ def export_workbook(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="trailkeeper-export.xlsx"'},
+    )
+
+
+@router.get("/app/export/photos.zip")
+def export_photos(identity: Identity, db: DbSession, project: str | None = None):
+    _user, membership = identity
+    pid = _selected_project_id(db, membership, project)
+    payload = photo_zip_bytes(db, membership, uuid.UUID(pid) if pid else None)
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="trailkeeper-photos.zip"'},
     )

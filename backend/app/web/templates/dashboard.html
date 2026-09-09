@@ -25,6 +25,9 @@
     </p>
     <p>
       <a class="btn" href="/app/export.xlsx{{ q }}">Workbook (.xlsx)</a>
+      {% if selected %}
+      <a class="btn secondary" href="/app/export/photos.zip{{ q }}">Photos (.zip)</a>
+      {% endif %}
     </p>
     <p class="muted">
       CSV:

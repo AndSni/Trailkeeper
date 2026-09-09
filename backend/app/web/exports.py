@@ -8,12 +8,16 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import uuid
+import zipfile
 from collections.abc import Callable
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models import (
     Inspection,
     JobType,
@@ -22,6 +26,7 @@ from app.models import (
     Structure,
     Task,
     TaskAssignee,
+    TaskPhoto,
     Trail,
     User,
 )
@@ -204,6 +209,58 @@ def csv_bytes(db: Session, membership: Membership, project_id: uuid.UUID | None,
     for row in builder(db, membership, project_id):
         writer.writerow(["" if v is None else v for v in row])
     return buf.getvalue().encode("utf-8")
+
+
+def _slug(text: str, fallback: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+    return s[:40] or fallback
+
+
+def photo_zip_bytes(
+    db: Session, membership: Membership, project_id: uuid.UUID | None
+) -> bytes:
+    """A zip of one project's task photos plus a manifest.csv. Photos are
+    small and few per project, so this is built in memory."""
+    manifest = io.StringIO()
+    writer = csv.writer(manifest)
+    writer.writerow(
+        ["task", "task_status", "caption", "uploaded_by", "uploaded_at", "file", "note"]
+    )
+
+    rows: list = []
+    if project_id is not None:
+        rows = db.execute(
+            select(TaskPhoto, Task, User.name)
+            .join(Task, Task.id == TaskPhoto.task_id)
+            .join(User, User.id == TaskPhoto.uploaded_by_id, isouter=True)
+            .where(Task.project_id == project_id, Task.deleted_at.is_(None))
+            .order_by(Task.title, TaskPhoto.created_at)
+        ).all()
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        seen: dict[str, int] = {}
+        for photo, task, who in rows:
+            ext = Path(photo.storage_path).suffix or ".jpg"
+            folder = f"{_slug(task.title, 'task')}-{str(task.id)[:8]}"
+            seen[folder] = seen.get(folder, 0) + 1
+            arcname = f"photos/{folder}/{seen[folder]:02d}{ext}"
+
+            src = Path(settings.upload_dir) / photo.storage_path
+            note = ""
+            if src.is_file():
+                zf.write(src, arcname)
+            else:
+                note = "file missing on disk"
+            writer.writerow(
+                [
+                    task.title, task.status, photo.caption, who or "",
+                    photo.created_at.isoformat(),
+                    arcname if not note else "", note,
+                ]
+            )
+        zf.writestr("manifest.csv", manifest.getvalue())
+    return buf.getvalue()
 
 
 def workbook_bytes(
