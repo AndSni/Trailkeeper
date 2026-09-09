@@ -22,6 +22,7 @@ from app.db import get_db
 from app.deps import CurrentMembership, CurrentUser
 from app.models import (
     ChangeLog,
+    GpxTrack,
     Inspection,
     InspectionForm,
     JobType,
@@ -40,6 +41,7 @@ from app.routes.inspections import fetch_inspection_out
 from app.routes.segment_work import fetch_segment_out
 from app.routes.structures import fetch_structure_out
 from app.routes.tasks import fetch_task_out
+from app.routes.tracks import fetch_track_out
 from app.routes.trails import fetch_trail_out
 from app.schemas import (
     JobTypeOut,
@@ -114,6 +116,8 @@ def _serialize_entity(db: Session, entity_type: str, entity_id: uuid.UUID) -> di
         out = fetch_inspection_form_out(db, entity_id)
     elif entity_type == "inspection":
         out = fetch_inspection_out(db, entity_id)
+    elif entity_type == "track":
+        out = fetch_track_out(db, entity_id)
     elif entity_type == "project":
         project = db.get(Project, entity_id)
         gone = project is None or project.deleted_at is not None
@@ -239,6 +243,11 @@ def get_snapshot(
             Inspection.project_id == proj.id, Inspection.deleted_at.is_(None)
         )
     )
+    track_rows = db.scalars(
+        select(GpxTrack.id).where(
+            GpxTrack.project_id == proj.id, GpxTrack.deleted_at.is_(None)
+        )
+    )
 
     high_seq = db.scalar(
         select(func.coalesce(func.max(ChangeLog.server_seq), 0)).where(
@@ -264,5 +273,6 @@ def get_snapshot(
         inspections=[
             i for iid in inspection_rows if (i := fetch_inspection_out(db, iid)) is not None
         ],
+        tracks=[t for tid in track_rows if (t := fetch_track_out(db, tid)) is not None],
         high_seq=high_seq or 0,
     )

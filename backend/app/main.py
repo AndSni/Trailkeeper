@@ -20,6 +20,7 @@ from app.routes import (
     structures,
     sync,
     tasks,
+    tracks,
     trails,
     work_logs,
 )
@@ -57,6 +58,7 @@ app.include_router(segment_work.router)
 app.include_router(structures.router)
 app.include_router(inspection_forms.router)
 app.include_router(inspections.router)
+app.include_router(tracks.router)
 app.include_router(sync.router)
 app.include_router(console.router)
 

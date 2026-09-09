@@ -573,6 +573,54 @@ class InspectionOut(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# GPX tracks (Phase 3)
+# --------------------------------------------------------------------------- #
+
+
+class TrackPointIn(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    ele: float | None = None
+    t: datetime | None = None  # per-point timestamp
+
+
+class TrackCreateIn(BaseModel):
+    project_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=200)
+    activity: str = Field(default="mtb", max_length=64)
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    moving_seconds: int = Field(default=0, ge=0)
+    points: list[TrackPointIn] = Field(min_length=2)
+
+
+class TrackUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    activity: str | None = Field(default=None, max_length=64)
+
+
+class TrackOut(BaseModel):
+    """Metadata + geometry for the sync stream and list views - never the
+    raw `points` (fetch those via GET /tracks/{id}/gpx)."""
+
+    id: uuid.UUID
+    organisation_id: uuid.UUID
+    project_id: uuid.UUID
+    name: str
+    activity: str
+    source: str
+    started_at: datetime | None
+    ended_at: datetime | None
+    moving_seconds: int
+    length_m: float
+    point_count: int
+    geometry: dict
+    recorded_by_id: uuid.UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+
+# --------------------------------------------------------------------------- #
 # Sync
 # --------------------------------------------------------------------------- #
 
@@ -609,6 +657,7 @@ class SyncSnapshotOut(BaseModel):
     structures: list[StructureOut] = []
     inspection_forms: list[InspectionFormOut] = []
     inspections: list[InspectionOut] = []
+    tracks: list[TrackOut] = []
     high_seq: int
 
 

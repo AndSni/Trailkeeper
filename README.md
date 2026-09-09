@@ -145,6 +145,18 @@ Android Room outbox). This slice is the backend the field app pulls from.
   work_log / message, upsert + delete), idempotent per `client_op_id`
   (`pushed_ops` table), whole-entity last-writer-wins via `base_updated_at`
 
+## What Phase 3 covers (backend) - GPX tracks
+
+- **Tracks** (`GET/POST/PATCH/DELETE /tracks`) - a route recorded live by
+  the field app or uploaded from GPX. Project-scoped like tasks; the
+  recorder or an org admin edits. Stored as a `LineString` geom (drives the
+  map + `ST_Length`) plus the full `points` JSON (elevation, per-point
+  timestamps) for a faithful re-export
+- `POST /tracks/import-gpx` - multipart GPX upload (`gpxpy`), one track per
+  GPX `<trk>`; `GET /tracks/{id}/gpx` - re-export as a GPX file
+- Synced (snapshot + changes) as metadata + geometry only; the raw `points`
+  are fetched on demand, never in the sync stream
+
 ## What Phase 2 covers (backend)
 
 - **Discussion** - the project's own thread + one per task (`task_id` null vs

@@ -123,6 +123,11 @@ class InspectionRisk(enum.StrEnum):
     critical = "critical"
 
 
+class TrackSource(enum.StrEnum):
+    recorded = "recorded"  # captured live by the field app
+    imported = "imported"  # uploaded from a GPX file
+
+
 _ORG_ROLES = ", ".join(f"'{r.value}'" for r in OrgRole)
 _PROJECT_ROLES = ", ".join(f"'{r.value}'" for r in ProjectRole)
 _PROJECT_STATUSES = ", ".join(f"'{s.value}'" for s in ProjectStatus)
@@ -132,6 +137,7 @@ _TASK_STATUSES = ", ".join(f"'{s.value}'" for s in TaskStatus)
 _STRUCTURE_TYPES = ", ".join(f"'{t.value}'" for t in StructureType)
 _STRUCTURE_STATUSES = ", ".join(f"'{s.value}'" for s in StructureStatus)
 _INSPECTION_RISKS = ", ".join(f"'{r.value}'" for r in InspectionRisk)
+_TRACK_SOURCES = ", ".join(f"'{s.value}'" for s in TrackSource)
 
 
 class TimestampMixin:
@@ -420,6 +426,7 @@ CHANGE_ENTITY_TYPES = (
     "structure",
     "inspection_form",
     "inspection",
+    "track",
 )
 
 
@@ -755,6 +762,51 @@ class Inspection(Base, TimestampMixin):
     # Branded PDF export lands in P6 (BLUEPRINT sec 11); column reserved.
     pdf_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# --------------------------------------------------------------------------- #
+# GPX tracks (Phase 3) - a route recorded live by the field app or uploaded
+# from a GPX file. See docs/BLUEPRINT.md sec 3, sec 15.
+#
+# The path is stored twice: `geom` (LineString) drives the map and the
+# derived length, and `points` (JSON) keeps the full per-point detail
+# (elevation, timestamps) for a faithful GPX re-export. Only `geom` +
+# metadata ride the sync stream; the raw points are fetched on demand.
+# --------------------------------------------------------------------------- #
+
+
+class GpxTrack(Base, TimestampMixin):
+    __tablename__ = "gpx_tracks"
+    __table_args__ = (
+        CheckConstraint(f"source in ({_TRACK_SOURCES})", name="ck_gpx_track_source"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organisations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    activity: Mapped[str] = mapped_column(String(64), default="mtb", nullable=False)
+    source: Mapped[str] = mapped_column(
+        String(16), default=TrackSource.recorded.value, nullable=False
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Seconds actually moving/recording (wall time minus pauses); 0 if unknown.
+    moving_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    geom: Mapped[WKBElement] = mapped_column(
+        Geometry(geometry_type="LINESTRING", srid=4326), nullable=False
+    )
+    # Full fidelity: list of {lat, lon, ele?, t?}. Not queried by element,
+    # not serialized into the sync stream.
+    points: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    recorded_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
