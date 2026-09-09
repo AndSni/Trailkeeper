@@ -69,13 +69,18 @@ async function request(path: string, init: RequestInit): Promise<Response> {
     throw new Error("Session expired");
   }
   if (!res.ok) {
-    let detail = "";
+    let message = `${init.method ?? "GET"} ${path} → ${res.status}`;
     try {
-      detail = (await res.json())?.detail ?? "";
+      const detail = (await res.json())?.detail;
+      if (typeof detail === "string" && detail) message = detail;
+      else if (Array.isArray(detail))
+        message = detail.map((d) => d?.msg ?? JSON.stringify(d)).join("; ");
+      else if (detail) message = JSON.stringify(detail);
     } catch {
-      /* no body */
+      /* no / non-JSON body */
     }
-    throw new Error(detail || `${init.method ?? "GET"} ${path} -> ${res.status}`);
+    console.error("API error:", init.method ?? "GET", path, res.status, message);
+    throw new Error(message);
   }
   return res;
 }
@@ -143,6 +148,8 @@ export interface Snapshot {
 export const listProjects = () => api<Project[]>("/projects");
 export const getSnapshot = (projectId: string) =>
   api<Snapshot>(`/sync/snapshot?project=${encodeURIComponent(projectId)}`);
+export const createProject = (name: string, activity = "mtb") =>
+  api<Project>("/projects", jsonInit("POST", { name, activity }));
 
 // --- mutations -----------------------------------------------------------
 

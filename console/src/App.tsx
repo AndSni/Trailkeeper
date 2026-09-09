@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  createProject,
   createStructure,
   createTask,
   deleteStructure,
@@ -26,7 +27,8 @@ type Mode =
   | { kind: "add-structure" }
   | { kind: "move"; tab: Tab; id: string }
   | { kind: "form-task"; lon: number; lat: number }
-  | { kind: "form-structure"; lon: number; lat: number };
+  | { kind: "form-structure"; lon: number; lat: number }
+  | { kind: "form-project" };
 
 const PRIORITIES = ["low", "medium", "high", "urgent"];
 const TASK_STATUSES = ["open", "in_progress", "done", "wontfix"];
@@ -54,18 +56,29 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    listProjects()
-      .then((ps) => {
-        setProjects(ps);
-        if (ps.length) setProjectId((cur) => cur ?? ps[0].id);
-      })
-      .catch((e) => setError(String(e)));
+  const setErr = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
+
+  const loadProjects = useCallback(async (selectId?: string) => {
+    try {
+      const ps = await listProjects();
+      const list = Array.isArray(ps) ? ps : [];
+      setProjects(list);
+      setProjectId((cur) => selectId ?? cur ?? list[0]?.id ?? null);
+    } catch (e) {
+      setErr(e);
+    }
   }, []);
 
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
   const reload = useCallback(() => {
-    if (!projectId) return;
-    return getSnapshot(projectId).then(setSnapshot).catch((e) => setError(String(e)));
+    if (!projectId) {
+      setSnapshot(null);
+      return;
+    }
+    return getSnapshot(projectId).then(setSnapshot).catch(setErr);
   }, [projectId]);
 
   useEffect(() => {
@@ -119,7 +132,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
       await fn();
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -147,12 +160,25 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
     <div className="app">
       <div className="topbar">
         <span className="brand">Trailkeeper</span>
-        <select value={projectId ?? ""} onChange={(e) => setProjectId(e.target.value)}>
+        <select
+          value={projectId ?? ""}
+          disabled={projects.length === 0}
+          onChange={(e) => setProjectId(e.target.value)}
+        >
+          {projects.length === 0 && <option value="">No projects</option>}
           {projects.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-        <button className="ghost" disabled={busy} onClick={() => setMode({ kind: "add-task" })}>
+        <button className="ghost" disabled={busy} onClick={() => setMode({ kind: "form-project" })}>
+          ＋ Project
+        </button>
+        <button
+          className="ghost"
+          disabled={busy || !projectId}
+          title={projectId ? "" : "Select or create a project first"}
+          onClick={() => setMode({ kind: "add-task" })}
+        >
           ＋ Task
         </button>
         <button className="ghost" disabled={busy} onClick={() => setMode({ kind: "add-structure" })}>
@@ -169,7 +195,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
           <button className="ghost" onClick={() => setMode({ kind: "idle" })}>Cancel</button>
         </div>
       )}
-      {error && <div className="err" style={{ margin: 8 }}>{error}</div>}
+      {error && <div className="err" style={{ margin: 8 }}>{String(error)}</div>}
 
       <div className="body">
         <div className="panel">
@@ -186,7 +212,13 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
             ))}
           </div>
 
-          {selectedRow ? (
+          {projects.length === 0 ? (
+            <div className="empty">
+              No projects yet. Use <strong>＋ Project</strong> to create the first one.
+            </div>
+          ) : !projectId ? (
+            <div className="empty">Pick a project above.</div>
+          ) : selectedRow ? (
             <Detail
               tab={tab}
               row={selectedRow}
@@ -213,10 +245,12 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                 })
               }
             />
+          ) : !snapshot ? (
+            <div className="empty">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="empty">Nothing here yet.</div>
           ) : (
             <div className="list">
-              {!snapshot && <div className="empty">Loading…</div>}
-              {snapshot && rows.length === 0 && <div className="empty">Nothing here yet.</div>}
               {rows.map((r) => (
                 <div
                   key={r.id}
@@ -237,13 +271,28 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
         <MapView snapshot={snapshot} focus={focus} picking={picking} onPick={onPick} />
       </div>
 
-      {mode.kind === "form-task" && (
+      {mode.kind === "form-project" && (
+        <CreateNameForm
+          title="New project"
+          label="Project name"
+          busy={busy}
+          onCancel={() => setMode({ kind: "idle" })}
+          onCreate={(name) =>
+            run(async () => {
+              const p = await createProject(name);
+              setMode({ kind: "idle" });
+              await loadProjects(p.id);
+            })
+          }
+        />
+      )}
+      {mode.kind === "form-task" && projectId && (
         <CreateTaskForm
           busy={busy}
           onCancel={() => setMode({ kind: "idle" })}
           onCreate={(title, priority) =>
             run(async () => {
-              await createTask(projectId!, { title, priority, lat: mode.lat, lon: mode.lon });
+              await createTask(projectId, { title, priority, lat: mode.lat, lon: mode.lon });
               setMode({ kind: "idle" });
               setTab("tasks");
             })
@@ -395,6 +444,32 @@ function CreateStructureForm({
         <button disabled={busy || !name.trim()} onClick={() => onCreate(name.trim(), type)}>
           Create
         </button>
+        <button className="ghost" onClick={onCancel}>Cancel</button>
+      </div>
+    </Modal>
+  );
+}
+
+function CreateNameForm({
+  title,
+  label,
+  busy,
+  onCancel,
+  onCreate,
+}: {
+  title: string;
+  label: string;
+  busy: boolean;
+  onCancel: () => void;
+  onCreate: (name: string) => void;
+}) {
+  const [name, setName] = useState("");
+  return (
+    <Modal title={title} onCancel={onCancel}>
+      <label>{label}</label>
+      <input value={name} autoFocus onChange={(e) => setName(e.target.value)} />
+      <div className="detail-actions">
+        <button disabled={busy || !name.trim()} onClick={() => onCreate(name.trim())}>Create</button>
         <button className="ghost" onClick={onCancel}>Cancel</button>
       </div>
     </Modal>
