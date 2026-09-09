@@ -3,6 +3,7 @@ import {
   createProject,
   createStructure,
   createTask,
+  createTrail,
   deleteStructure,
   deleteTask,
   deleteTrail,
@@ -25,14 +26,17 @@ type Mode =
   | { kind: "idle" }
   | { kind: "add-task" }
   | { kind: "add-structure" }
+  | { kind: "draw-trail" }
   | { kind: "move"; tab: Tab; id: string }
   | { kind: "form-task"; lon: number; lat: number }
   | { kind: "form-structure"; lon: number; lat: number }
+  | { kind: "form-trail" }
   | { kind: "form-project" };
 
 const PRIORITIES = ["low", "medium", "high", "urgent"];
 const TASK_STATUSES = ["open", "in_progress", "done", "wontfix"];
 const TRAIL_STATUSES = ["open", "closed", "needs_work"];
+const DIFFICULTIES = ["", "easy", "moderate", "hard", "expert"];
 const STRUCTURE_TYPES = [
   "culvert", "bridge", "boardwalk", "ford", "steps", "retaining_wall",
   "drain", "waterbar", "sign", "gate", "bench", "kiosk", "other",
@@ -55,6 +59,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
   const [focus, setFocus] = useState<FocusTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<[number, number][]>([]);
 
   const setErr = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
 
@@ -141,6 +146,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
   function onPick([lon, lat]: [number, number]) {
     if (mode.kind === "add-task") setMode({ kind: "form-task", lon, lat });
     else if (mode.kind === "add-structure") setMode({ kind: "form-structure", lon, lat });
+    else if (mode.kind === "draw-trail") setDraft((p) => [...p, [lon, lat]]);
     else if (mode.kind === "move") {
       const { tab: mt, id } = mode;
       setMode({ kind: "idle" });
@@ -154,7 +160,17 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
     }
   }
 
-  const picking = mode.kind === "add-task" || mode.kind === "add-structure" || mode.kind === "move";
+  const drawing = mode.kind === "draw-trail";
+  const picking =
+    mode.kind === "add-task" ||
+    mode.kind === "add-structure" ||
+    mode.kind === "move" ||
+    drawing;
+
+  function cancelDraw() {
+    setMode({ kind: "idle" });
+    setDraft([]);
+  }
 
   return (
     <div className="app">
@@ -184,17 +200,36 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
         <button className="ghost" disabled={busy} onClick={() => setMode({ kind: "add-structure" })}>
           ＋ Structure
         </button>
+        <button
+          className="ghost"
+          disabled={busy}
+          onClick={() => { setDraft([]); setMode({ kind: "draw-trail" }); }}
+        >
+          ＋ Trail
+        </button>
         <span className="spacer" />
         <a href="/app">Dashboard</a>
         <button className="ghost" onClick={() => { signOut(); onSignOut(); }}>Sign out</button>
       </div>
 
-      {picking && (
+      {drawing ? (
+        <div className="banner">
+          Click the map to add trail points — {draft.length}{" "}
+          {draft.length === 1 ? "point" : "points"}
+          <button className="ghost" disabled={!draft.length} onClick={() => setDraft((p) => p.slice(0, -1))}>
+            Undo last
+          </button>
+          <button disabled={draft.length < 2} onClick={() => setMode({ kind: "form-trail" })}>
+            Finish
+          </button>
+          <button className="ghost" onClick={cancelDraw}>Cancel</button>
+        </div>
+      ) : picking ? (
         <div className="banner">
           {mode.kind === "move" ? "Click the map to set the new location" : "Click the map to place it"}
           <button className="ghost" onClick={() => setMode({ kind: "idle" })}>Cancel</button>
         </div>
-      )}
+      ) : null}
       {error && <div className="err" style={{ margin: 8 }}>{String(error)}</div>}
 
       <div className="body">
@@ -255,7 +290,11 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                 <div
                   key={r.id}
                   className="row"
-                  onClick={() => { setSelected(r.id); focusGeom(r.geometry); }}
+                  onClick={() => {
+                    if (drawing) return;
+                    setSelected(r.id);
+                    focusGeom(r.geometry);
+                  }}
                 >
                   <div className="name">{r.name}</div>
                   <div className="meta">
@@ -268,7 +307,13 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
           )}
         </div>
 
-        <MapView snapshot={snapshot} focus={focus} picking={picking} onPick={onPick} />
+        <MapView
+          snapshot={snapshot}
+          focus={focus}
+          picking={picking}
+          draft={mode.kind === "draw-trail" || mode.kind === "form-trail" ? draft : null}
+          onPick={onPick}
+        />
       </div>
 
       {mode.kind === "form-project" && (
@@ -312,7 +357,67 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
           }
         />
       )}
+      {mode.kind === "form-trail" && (
+        <CreateTrailForm
+          points={draft.length}
+          busy={busy}
+          onCancel={cancelDraw}
+          onCreate={(name, difficulty, status) =>
+            run(async () => {
+              await createTrail({
+                name,
+                difficulty: difficulty || undefined,
+                status,
+                points: draft.map(([lng, lat]) => [lat, lng]),
+              });
+              setDraft([]);
+              setMode({ kind: "idle" });
+              setTab("trails");
+            })
+          }
+        />
+      )}
     </div>
+  );
+}
+
+function CreateTrailForm({
+  points,
+  busy,
+  onCancel,
+  onCreate,
+}: {
+  points: number;
+  busy: boolean;
+  onCancel: () => void;
+  onCreate: (name: string, difficulty: string, status: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [difficulty, setDifficulty] = useState("");
+  const [status, setStatus] = useState("open");
+  return (
+    <Modal title={`New trail · ${points} points`} onCancel={onCancel}>
+      <label>Name</label>
+      <input value={name} autoFocus onChange={(e) => setName(e.target.value)} />
+      <label>Difficulty</label>
+      <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+        {DIFFICULTIES.map((d) => (
+          <option key={d} value={d}>{d || "(none)"}</option>
+        ))}
+      </select>
+      <label>Status</label>
+      <select value={status} onChange={(e) => setStatus(e.target.value)}>
+        {TRAIL_STATUSES.map((s) => (
+          <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+        ))}
+      </select>
+      <div className="detail-actions">
+        <button disabled={busy || !name.trim()} onClick={() => onCreate(name.trim(), difficulty, status)}>
+          Create trail
+        </button>
+        <button className="ghost" onClick={onCancel}>Cancel</button>
+      </div>
+    </Modal>
   );
 }
 

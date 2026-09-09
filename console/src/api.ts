@@ -182,3 +182,11 @@ export const updateTrail = (id: string, body: Record<string, unknown>) =>
   api<Trail>(`/trails/${id}`, jsonInit("PATCH", body));
 
 export const deleteTrail = (id: string) => apiVoid(`/trails/${id}`, { method: "DELETE" });
+
+// `points` are [lat, lon] pairs in order along the line (backend's TrailCreateIn).
+export const createTrail = (body: {
+  name: string;
+  difficulty?: string;
+  status?: string;
+  points: [number, number][];
+}) => api<Trail>("/trails", jsonInit("POST", body));

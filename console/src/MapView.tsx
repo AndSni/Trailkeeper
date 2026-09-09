@@ -5,6 +5,7 @@ import { boundsOf, structureFC, taskFC, trailFC } from "./geo";
 import type { Bounds } from "./geo";
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+const EMPTY = { type: "FeatureCollection" as const, features: [] };
 
 export interface FocusTarget {
   bounds?: Bounds;
@@ -16,11 +17,13 @@ export function MapView({
   snapshot,
   focus,
   picking = false,
+  draft = null,
   onPick,
 }: {
   snapshot: Snapshot | null;
   focus: FocusTarget | null;
   picking?: boolean;
+  draft?: [number, number][] | null; // [lng, lat] vertices being drawn
   onPick?: (lngLat: [number, number]) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,10 +46,11 @@ export function MapView({
     mapRef.current = map;
 
     map.on("load", () => {
-      const empty = { type: "FeatureCollection" as const, features: [] };
-      map.addSource("tk-trails", { type: "geojson", data: empty });
-      map.addSource("tk-tasks", { type: "geojson", data: empty });
-      map.addSource("tk-structures", { type: "geojson", data: empty });
+      map.addSource("tk-trails", { type: "geojson", data: EMPTY });
+      map.addSource("tk-tasks", { type: "geojson", data: EMPTY });
+      map.addSource("tk-structures", { type: "geojson", data: EMPTY });
+      map.addSource("tk-draft-line", { type: "geojson", data: EMPTY });
+      map.addSource("tk-draft-pts", { type: "geojson", data: EMPTY });
       map.addLayer({
         id: "tk-trails-line",
         type: "line",
@@ -76,8 +80,26 @@ export function MapView({
           "circle-stroke-color": "#fff",
         },
       });
+      map.addLayer({
+        id: "tk-draft-line",
+        type: "line",
+        source: "tk-draft-line",
+        paint: { "line-color": "#b7791f", "line-width": 3, "line-dasharray": [2, 1.5] },
+      });
+      map.addLayer({
+        id: "tk-draft-pts",
+        type: "circle",
+        source: "tk-draft-pts",
+        paint: {
+          "circle-radius": 4,
+          "circle-color": "#b7791f",
+          "circle-stroke-width": 1.5,
+          "circle-stroke-color": "#fff",
+        },
+      });
       readyRef.current = true;
       pushData();
+      pushDraft();
     });
 
     return () => {
@@ -110,7 +132,31 @@ export function MapView({
     }
   }
 
+  function pushDraft() {
+    const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    const pts = draft ?? [];
+    (map.getSource("tk-draft-pts") as maplibregl.GeoJSONSource)?.setData({
+      type: "FeatureCollection",
+      features: pts.map((c) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: c },
+        properties: {},
+      })),
+    } as never);
+    (map.getSource("tk-draft-line") as maplibregl.GeoJSONSource)?.setData(
+      (pts.length >= 2
+        ? {
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: pts },
+            properties: {},
+          }
+        : EMPTY) as never,
+    );
+  }
+
   useEffect(pushData, [snapshot]);
+  useEffect(pushDraft, [draft]);
 
   useEffect(() => {
     const map = mapRef.current;

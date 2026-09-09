@@ -271,10 +271,13 @@ checkout has no `/console/` until you build it.
 - Side panel: Tasks / Trails / Structures lists; click a row to fly the map
   to it and open a detail panel
 - **Editing from the map**: "＋ Task" / "＋ Structure" then click the map to
-  place it (a small form asks for title+priority / name+type). A selected
-  item's detail panel changes status / priority / type, "Move" re-points it
-  with a map click, "Delete" removes it. Trails: status + delete only
-  (geometry editing is a later slice). Every mutation re-pulls the snapshot
+  place it (a small form asks for title+priority / name+type). "＋ Trail"
+  is click-to-add-vertices with a live dashed preview, Undo last / Finish,
+  then a name + difficulty + status form → `POST /trails` (admin+). A
+  selected item's detail panel changes status / priority / type, "Move"
+  re-points a task or structure with a map click, "Delete" removes it.
+  Trails are draw-and-delete plus status edit (no vertex editing yet).
+  Every mutation re-pulls the snapshot
 - Dev: `cd console && npm install && npm run dev` (proxies the API to
   `127.0.0.1:9110`)
 
