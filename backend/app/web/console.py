@@ -30,6 +30,7 @@ from app.schemas import AcceptInviteIn, InviteIn, LoginIn, RegisterIn
 from app.security import decode_token
 from app.web.dashboard import gather
 from app.web.exports import DATASETS, csv_bytes, photo_zip_bytes, workbook_bytes
+from app.web.pdf import report_pdf
 
 router = APIRouter(tags=["console"], include_in_schema=False)
 
@@ -362,4 +363,16 @@ def export_photos(identity: Identity, db: DbSession, project: str | None = None)
         content=payload,
         media_type="application/zip",
         headers={"Content-Disposition": 'attachment; filename="trailkeeper-photos.zip"'},
+    )
+
+
+@router.get("/app/export/report.pdf")
+def export_report(identity: Identity, db: DbSession, project: str | None = None):
+    _user, membership = identity
+    pid = _selected_project_id(db, membership, project)
+    payload = report_pdf(db, membership, pid)
+    return Response(
+        content=payload,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="trailkeeper-report.pdf"'},
     )

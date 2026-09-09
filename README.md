@@ -249,9 +249,12 @@ same domain. The browser session is the refresh-token JWT in an HttpOnly
   that mints a new invite link
 - **Exports** - `/app/export/<dataset>.csv` (hours, productivity, tasks,
   segments, structures, inspections), `/app/export.xlsx` (one workbook, a
-  sheet per dataset via `openpyxl`), and `/app/export/photos.zip` (a
-  project's task photos + a `manifest.csv`). Project-scoped datasets follow
-  the dashboard's `?project=` selection; computed live, no caching
+  sheet per dataset via `openpyxl`), `/app/export/report.pdf` (a project
+  report via `fpdf2` - pure Python, no system libraries; picks up a system
+  Liberation/DejaVu/Noto TTF so Latvian renders), and
+  `/app/export/photos.zip` (a project's task photos + a `manifest.csv`).
+  Project-scoped datasets follow the dashboard's `?project=` selection;
+  computed live, no caching
 - Console-form CSRF protection currently relies on the `SameSite=Lax`
   session cookie
 

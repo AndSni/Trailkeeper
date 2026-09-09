@@ -109,10 +109,8 @@ def test_invite_page_invalid_token(client):
 
 
 def test_exports_require_session(client):
-    r = client.get("/app/export/hours.csv", follow_redirects=False)
-    assert r.status_code in (303, 307)
-    x = client.get("/app/export.xlsx", follow_redirects=False)
-    assert x.status_code in (303, 307)
+    for path in ("/app/export/hours.csv", "/app/export.xlsx", "/app/export/report.pdf"):
+        assert client.get(path, follow_redirects=False).status_code in (303, 307)
 
 
 def test_csv_and_xlsx_exports(client):
@@ -171,6 +169,23 @@ def test_csv_and_xlsx_exports(client):
     assert wb["Tasks"].cell(row=1, column=1).value == "Title"
     task_titles = [row[0] for row in wb["Tasks"].iter_rows(min_row=2, values_only=True)]
     assert "Fix the berm" in task_titles
+
+
+def test_pdf_report_export(client):
+    _register(client, email="pdf@example.com")
+    tokens = client.post(
+        "/auth/login",
+        json={"email": "pdf@example.com", "password": "a decent long passphrase"},
+    ).json()
+    h = {"Authorization": f"Bearer {tokens['access_token']}"}
+    client.post("/projects", headers=h, json={"name": "Mežinieku loks", "activity": "mtb"})
+
+    r = client.get("/app/export/report.pdf")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert "attachment" in r.headers["content-disposition"]
+    assert r.content[:5] == b"%PDF-"
+    assert len(r.content) > 1000
 
 
 def test_photo_zip_export(client):
