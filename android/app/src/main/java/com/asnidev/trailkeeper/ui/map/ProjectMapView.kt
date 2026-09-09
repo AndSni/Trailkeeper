@@ -18,6 +18,7 @@ import com.asnidev.trailkeeper.data.local.TrailEntity
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
@@ -59,6 +60,10 @@ fun ProjectMap(
     hasLocationPermission: Boolean,
     modifier: Modifier = Modifier,
     focus: MapFocus? = null,
+    projectTrailIds: Set<String> = emptySet(),
+    projectStructureIds: Set<String> = emptySet(),
+    projectBounds: LatLngBounds? = null,
+    showAllAssets: Boolean = true,
     onFeatureTap: (kind: String, id: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
@@ -102,7 +107,8 @@ fun ProjectMap(
                     style.addLayer(
                         LineLayer("$TRAIL_SRC-line", TRAIL_SRC).withProperties(
                             PropertyFactory.lineColor("#3C5A31"),
-                            PropertyFactory.lineWidth(3f),
+                            PropertyFactory.lineWidth(dimSwitch(1.5f, 3f)),
+                            PropertyFactory.lineOpacity(dimSwitch(0.28f, 1f)),
                             PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
                             PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                         )
@@ -126,7 +132,8 @@ fun ProjectMap(
                     )
                     style.addLayer(
                         CircleLayer("$STRUCTURE_SRC-dot", STRUCTURE_SRC).withProperties(
-                            PropertyFactory.circleRadius(6f),
+                            PropertyFactory.circleRadius(dimSwitch(4f, 6f)),
+                            PropertyFactory.circleOpacity(dimSwitch(0.35f, 1f)),
                             PropertyFactory.circleColor(
                                 Expression.toColor(
                                     Expression.coalesce(
@@ -135,12 +142,16 @@ fun ProjectMap(
                                     )
                                 )
                             ),
-                            PropertyFactory.circleStrokeWidth(2f),
+                            PropertyFactory.circleStrokeWidth(dimSwitch(0.5f, 2f)),
                             PropertyFactory.circleStrokeColor("#FFFFFF"),
+                            PropertyFactory.circleStrokeOpacity(dimSwitch(0.35f, 1f)),
                         )
                     )
                     enableLocation(context, map, style, hasLocationPermission)
-                    pushData(holder, trails, tasks, structures, tracks)
+                    pushData(
+                        holder, trails, tasks, structures, tracks,
+                        projectTrailIds, projectStructureIds, projectBounds, showAllAssets,
+                    )
                 }
             }
         }
@@ -169,7 +180,10 @@ fun ProjectMap(
         factory = { mapView },
         modifier = modifier,
         update = {
-            pushData(holder, trails, tasks, structures, tracks)
+            pushData(
+                holder, trails, tasks, structures, tracks,
+                projectTrailIds, projectStructureIds, projectBounds, showAllAssets,
+            )
             if (focus != null && focus.third != holder.lastFocusNonce) {
                 holder.lastFocusNonce = focus.third
                 holder.map?.easeCamera(
@@ -187,22 +201,42 @@ private fun pushData(
     tasks: List<TaskEntity>,
     structures: List<StructureEntity>,
     tracks: List<TrackEntity>,
+    projectTrailIds: Set<String>,
+    projectStructureIds: Set<String>,
+    projectBounds: LatLngBounds?,
+    showAllAssets: Boolean,
 ) {
     val style = holder.style ?: return
-    (style.getSource(TRAIL_SRC) as? GeoJsonSource)?.setGeoJson(MapGeo.trailFeatures(trails))
+    val dimTrails =
+        if (showAllAssets) emptySet()
+        else trails.map { it.id }.toSet() - projectTrailIds
+    val dimStructures =
+        if (showAllAssets) emptySet()
+        else structures.map { it.id }.toSet() - projectStructureIds
+
+    (style.getSource(TRAIL_SRC) as? GeoJsonSource)
+        ?.setGeoJson(MapGeo.trailFeatures(trails, dimTrails))
     (style.getSource(TRACK_SRC) as? GeoJsonSource)?.setGeoJson(MapGeo.trackFeatures(tracks))
     (style.getSource(TASK_SRC) as? GeoJsonSource)?.setGeoJson(MapGeo.taskFeatures(tasks))
     (style.getSource(STRUCTURE_SRC) as? GeoJsonSource)
-        ?.setGeoJson(MapGeo.structureFeatures(structures))
+        ?.setGeoJson(MapGeo.structureFeatures(structures, dimStructures))
 
     if (!holder.fittedCamera) {
-        val bounds = MapGeo.bounds(trails, tasks, structures, tracks)
+        val bounds = projectBounds ?: MapGeo.bounds(trails, tasks, structures, tracks)
         if (bounds != null) {
             holder.map?.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds, 72), 500)
             holder.fittedCamera = true
         }
     }
 }
+
+/** `dim` feature-flag → [dimValue] when set, [fullValue] otherwise. */
+private fun dimSwitch(dimValue: Float, fullValue: Float): Expression =
+    Expression.switchCase(
+        Expression.get("dim"),
+        Expression.literal(dimValue),
+        Expression.literal(fullValue),
+    )
 
 @SuppressLint("MissingPermission")
 private fun enableLocation(

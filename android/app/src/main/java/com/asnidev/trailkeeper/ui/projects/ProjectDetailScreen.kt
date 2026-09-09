@@ -73,6 +73,7 @@ import androidx.core.content.ContextCompat
 import com.asnidev.trailkeeper.network.StructurePatchRequest
 import com.asnidev.trailkeeper.ui.common.PointPickerScreen
 import com.asnidev.trailkeeper.ui.map.MapFocus
+import com.asnidev.trailkeeper.ui.map.MapGeo
 import com.asnidev.trailkeeper.ui.structures.ColorPicker
 import com.asnidev.trailkeeper.ui.map.ProjectMap
 import com.asnidev.trailkeeper.ui.segments.SegmentWorkTab
@@ -128,6 +129,14 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
     val unreadCommentTasks by vm.unreadCommentTasks.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showAdd by remember { mutableStateOf(false) }
+    var showAllAssets by rememberSaveable { mutableStateOf(false) }
+
+    // Trails/structures are org-wide; this frames the map to the project's
+    // working area and dims assets outside it (unless "All assets" is on).
+    val mapScope =
+        remember(s.trails, s.tasks, structures, tracks) {
+            MapGeo.projectScope(s.trails, s.tasks, structures, tracks)
+        }
 
     // Selected entity for the detail bottom-sheet: Pair(kind, id).
     var selected by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -272,17 +281,33 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                             onSetStatus = vm::setStatus,
                             onOpen = { t -> selected = "task" to t.id; focusOnMap(t.geometryJson) },
                         )
-                    tab == 1 ->
-                        ProjectMap(
-                            trails = s.trails,
-                            tasks = s.tasks,
-                            structures = structures,
-                            tracks = tracks,
-                            hasLocationPermission = hasLocation,
-                            modifier = Modifier.fillMaxSize(),
-                            focus = mapFocus,
-                            onFeatureTap = { kind, id -> selected = kind to id },
-                        )
+                    tab == 1 -> {
+                        val showAll = showAllAssets || mapScope.bounds == null
+                        Box(Modifier.fillMaxSize()) {
+                            ProjectMap(
+                                trails = s.trails,
+                                tasks = s.tasks,
+                                structures = structures,
+                                tracks = tracks,
+                                hasLocationPermission = hasLocation,
+                                modifier = Modifier.fillMaxSize(),
+                                focus = mapFocus,
+                                projectTrailIds = mapScope.trailIds,
+                                projectStructureIds = mapScope.structureIds,
+                                projectBounds = mapScope.bounds,
+                                showAllAssets = showAll,
+                                onFeatureTap = { kind, id -> selected = kind to id },
+                            )
+                            if (mapScope.bounds != null) {
+                                AssetScopeToggle(
+                                    showAll = showAllAssets,
+                                    onChange = { showAllAssets = it },
+                                    modifier =
+                                        Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
+                                )
+                            }
+                        }
+                    }
                     tab == 2 ->
                         RouteTab(
                             projectId = projectId,
@@ -830,6 +855,46 @@ private fun AddTaskDialog(onDismiss: () -> Unit, onCreate: (String, String) -> U
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+@Composable
+private fun AssetScopeToggle(
+    showAll: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
+        shadowElevation = 2.dp,
+    ) {
+        Row(Modifier.padding(3.dp)) {
+            ScopeSegment("This project", selected = !showAll) { onChange(false) }
+            ScopeSegment("All assets", selected = showAll) { onChange(true) }
+        }
+    }
+}
+
+@Composable
+private fun ScopeSegment(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color =
+            if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.surface,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color =
+                if (selected) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+        )
+    }
 }
 
 @Composable
