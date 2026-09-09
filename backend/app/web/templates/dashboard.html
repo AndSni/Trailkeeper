@@ -17,7 +17,27 @@
     </div>
   </div>
 
+  {% set q = '?project=' ~ selected.id if selected else '' %}
   <div class="card" style="margin-top:16px">
+    <h2>Export</h2>
+    <p class="muted">
+      {% if selected %}Project-scoped sheets use <strong>{{ selected.name }}</strong>.{% endif %}
+    </p>
+    <p>
+      <a class="btn" href="/app/export.xlsx{{ q }}">Workbook (.xlsx)</a>
+    </p>
+    <p class="muted">
+      CSV:
+      <a href="/app/export/hours.csv{{ q }}">hours</a> ·
+      <a href="/app/export/productivity.csv{{ q }}">productivity</a> ·
+      <a href="/app/export/tasks.csv{{ q }}">tasks</a> ·
+      <a href="/app/export/segments.csv{{ q }}">segments</a> ·
+      <a href="/app/export/structures.csv">structures</a> ·
+      <a href="/app/export/inspections.csv">inspections</a>
+    </p>
+  </div>
+
+  <div class="card">
     <h2>Projects</h2>
     <table>
       <tr><th>Name</th><th>Status</th><th class="num">Open</th><th class="num">Done</th><th class="num">Members</th></tr>

@@ -246,8 +246,12 @@ same domain. The browser session is the refresh-token JWT in an HttpOnly
   status, recent inspections with risk
 - **`/app/members`** (admin+) - people and roles, pending invites, and a form
   that mints a new invite link
-- Not yet: cached aggregates, CSV / XLSX / PDF / photo-zip exports, the React
-  + MapLibre GL JS map console (`docs/BLUEPRINT.md` sec 11). Console-form CSRF
+- **Exports** - `/app/export/<dataset>.csv` (hours, productivity, tasks,
+  segments, structures, inspections) and `/app/export.xlsx` (one workbook,
+  a sheet per dataset via `openpyxl`). Project-scoped sheets follow the
+  dashboard's `?project=` selection; computed live, no caching
+- Not yet: cached aggregates, PDF / photo-zip exports, the React + MapLibre
+  GL JS map console (`docs/BLUEPRINT.md` sec 11). Console-form CSRF
   protection currently relies on the `SameSite=Lax` session cookie
 
 ## Roadmap

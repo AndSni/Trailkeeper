@@ -106,3 +106,68 @@ def test_invite_page_invalid_token(client):
     page = client.get("/invite/not-a-real-token")
     assert page.status_code == 200
     assert "Invite not valid" in page.text
+
+
+def test_exports_require_session(client):
+    r = client.get("/app/export/hours.csv", follow_redirects=False)
+    assert r.status_code in (303, 307)
+    x = client.get("/app/export.xlsx", follow_redirects=False)
+    assert x.status_code in (303, 307)
+
+
+def test_csv_and_xlsx_exports(client):
+    _register(client, email="ex@example.com")
+    tokens = client.post(
+        "/auth/login",
+        json={"email": "ex@example.com", "password": "a decent long passphrase"},
+    ).json()
+    h = {"Authorization": f"Bearer {tokens['access_token']}"}
+    pid = client.post(
+        "/projects", headers=h, json={"name": "Exportable", "activity": "mtb"}
+    ).json()["id"]
+    client.post(
+        f"/tasks?project_id={pid}",
+        headers=h,
+        json={"title": "Fix the berm", "priority": "high", "estimate_min": 45},
+    )
+    struct_id = client.post(
+        "/structures", headers=h, json={"name": "Culvert 9", "structure_type": "culvert"}
+    ).json()["id"]
+    client.post(
+        "/inspections",
+        headers=h,
+        json={"project_id": pid, "structure_id": struct_id, "risk": "medium"},
+    )
+
+    tasks_csv = client.get("/app/export/tasks.csv")
+    assert tasks_csv.status_code == 200
+    assert tasks_csv.headers["content-type"].startswith("text/csv")
+    assert "attachment" in tasks_csv.headers["content-disposition"]
+    body = tasks_csv.text
+    assert body.splitlines()[0].startswith("Title,Type,Priority,Status")
+    assert "Fix the berm" in body
+
+    ins_csv = client.get("/app/export/inspections.csv")
+    assert ins_csv.status_code == 200
+    assert "Culvert 9" in ins_csv.text
+    assert "medium" in ins_csv.text
+
+    bad = client.get("/app/export/nonsense.csv")
+    assert bad.status_code == 404
+
+    xlsx = client.get("/app/export.xlsx")
+    assert xlsx.status_code == 200
+    assert "spreadsheetml" in xlsx.headers["content-type"]
+    assert xlsx.content[:2] == b"PK"  # xlsx is a zip
+
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    wb = load_workbook(BytesIO(xlsx.content))
+    assert set(wb.sheetnames) == {
+        "Hours", "Productivity", "Tasks", "Segments", "Structures", "Inspections"
+    }
+    assert wb["Tasks"].cell(row=1, column=1).value == "Title"
+    task_titles = [row[0] for row in wb["Tasks"].iter_rows(min_row=2, values_only=True)]
+    assert "Fix the berm" in task_titles

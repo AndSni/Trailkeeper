@@ -14,7 +14,7 @@ from typing import Annotated
 
 import jwt
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,6 +29,7 @@ from app.routes.org import create_invite as api_create_invite
 from app.schemas import AcceptInviteIn, InviteIn, LoginIn, RegisterIn
 from app.security import decode_token
 from app.web.dashboard import gather
+from app.web.exports import DATASETS, csv_bytes, workbook_bytes
 
 router = APIRouter(tags=["console"], include_in_schema=False)
 
@@ -310,3 +311,43 @@ def members_invite(
     except (HTTPException, ValueError):
         return _redirect("/app/members")
     return _redirect(f"/app/members?invited={invite.token}")
+
+
+# --------------------------------------------------------------------------- #
+# Exports (BLUEPRINT sec 11)
+# --------------------------------------------------------------------------- #
+
+
+def _selected_project_id(db: Session, membership: Membership, project: str | None) -> str | None:
+    ctx = gather(db, membership, project)
+    return ctx["selected"]["id"] if ctx["selected"] else None
+
+
+@router.get("/app/export/{dataset}.csv")
+def export_csv(
+    dataset: str, identity: Identity, db: DbSession, project: str | None = None
+):
+    _user, membership = identity
+    if dataset not in DATASETS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown dataset")
+    pid = _selected_project_id(db, membership, project)
+    payload = csv_bytes(db, membership, uuid.UUID(pid) if pid else None, dataset)
+    return Response(
+        content=payload,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="trailkeeper-{dataset}.csv"'},
+    )
+
+
+@router.get("/app/export.xlsx")
+def export_workbook(
+    identity: Identity, db: DbSession, project: str | None = None
+):
+    _user, membership = identity
+    pid = _selected_project_id(db, membership, project)
+    payload = workbook_bytes(db, membership, uuid.UUID(pid) if pid else None)
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="trailkeeper-export.xlsx"'},
+    )
