@@ -137,11 +137,23 @@ export interface Structure {
   geometry: GeoJson | null;
 }
 
+export interface Track {
+  id: string;
+  name: string;
+  activity: string;
+  source: string;
+  started_at: string | null;
+  length_m: number;
+  point_count: number;
+  geometry: GeoJson | null;
+}
+
 export interface Snapshot {
   project: Project;
   trails: Trail[];
   tasks: Task[];
   structures: Structure[];
+  tracks: Track[];
   high_seq: number;
 }
 
@@ -190,3 +202,25 @@ export const createTrail = (body: {
   status?: string;
   points: [number, number][];
 }) => api<Trail>("/trails", jsonInit("POST", body));
+
+export const deleteTrack = (id: string) => apiVoid(`/tracks/${id}`, { method: "DELETE" });
+
+export async function importGpx(projectId: string, file: File): Promise<Track[]> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("project_id", projectId);
+  return api<Track[]>("/tracks/import-gpx", { method: "POST", body: form });
+}
+
+export async function downloadGpx(id: string, name: string): Promise<void> {
+  const res = await request(`/tracks/${id}/gpx`, {});
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${name.replace(/[^A-Za-z0-9._-]+/g, "-") || "track"}.gpx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

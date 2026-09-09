@@ -313,6 +313,9 @@ checkout has no `/console/` until you build it.
   re-points a task or structure with a map click, "Delete" removes it.
   Trails are draw-and-delete plus status edit (no vertex editing yet).
   Every mutation re-pulls the snapshot
+- **Tracks** - recorded/imported routes show as a purple dashed layer and a
+  "Tracks" tab; per row, download the GPX or delete it. "Import GPX" in the
+  toolbar uploads a file to `POST /tracks/import-gpx`
 - Dev: `cd console && npm install && npm run dev` (proxies the API to
   `127.0.0.1:9110`)
 

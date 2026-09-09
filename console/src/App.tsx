@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   createProject,
   createStructure,
@@ -7,7 +7,10 @@ import {
   deleteStructure,
   deleteTask,
   deleteTrail,
+  deleteTrack,
+  downloadGpx,
   getSnapshot,
+  importGpx,
   isSignedIn,
   listProjects,
   signOut,
@@ -21,7 +24,7 @@ import { Login } from "./Login";
 import { MapView, type FocusTarget } from "./MapView";
 import { boundsOf, centerOf } from "./geo";
 
-type Tab = "tasks" | "trails" | "structures";
+type Tab = "tasks" | "trails" | "structures" | "tracks";
 type Mode =
   | { kind: "idle" }
   | { kind: "add-task" }
@@ -60,6 +63,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<[number, number][]>([]);
+  const gpxInput = useRef<HTMLInputElement>(null);
 
   const setErr = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
 
@@ -108,6 +112,15 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
         name: s.name,
         meta: `${s.structure_type.replace(/_/g, " ")} · ${s.status.replace(/_/g, " ")}`,
         geometry: s.geometry,
+      }));
+    if (tab === "tracks")
+      return snapshot.tracks.map((t) => ({
+        id: t.id,
+        name: t.name,
+        meta:
+          `${(t.length_m / 1000).toFixed(2)} km · ${t.point_count} pts · ${t.source}` +
+          (t.started_at ? ` · ${t.started_at.slice(0, 10)}` : ""),
+        geometry: t.geometry,
       }));
     return snapshot.tasks.map((t) => ({
       id: t.id,
@@ -207,6 +220,29 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
         >
           ＋ Trail
         </button>
+        <button
+          className="ghost"
+          disabled={busy || !projectId}
+          onClick={() => gpxInput.current?.click()}
+        >
+          Import GPX
+        </button>
+        <input
+          ref={gpxInput}
+          type="file"
+          accept=".gpx,application/gpx+xml"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file && projectId) {
+              run(async () => {
+                await importGpx(projectId, file);
+                setTab("tracks");
+              });
+            }
+          }}
+        />
         <span className="spacer" />
         <a href="/app">Dashboard</a>
         <button className="ghost" onClick={() => { signOut(); onSignOut(); }}>Sign out</button>
@@ -235,7 +271,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
       <div className="body">
         <div className="panel">
           <div className="tabs">
-            {(["tasks", "trails", "structures"] as Tab[]).map((t) => (
+            {(["tasks", "trails", "structures", "tracks"] as Tab[]).map((t) => (
               <button
                 key={t}
                 className={tab === t ? "active" : ""}
@@ -253,7 +289,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
             </div>
           ) : !projectId ? (
             <div className="empty">Pick a project above.</div>
-          ) : selectedRow ? (
+          ) : selectedRow && tab !== "tracks" ? (
             <Detail
               tab={tab}
               row={selectedRow}
@@ -292,7 +328,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                   className="row"
                   onClick={() => {
                     if (drawing) return;
-                    setSelected(r.id);
+                    if (tab !== "tracks") setSelected(r.id);
                     focusGeom(r.geometry);
                   }}
                 >
@@ -301,6 +337,29 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                     {r.meta}
                     {!r.geometry && <span className="pill" style={{ marginLeft: 6 }}>no location</span>}
                   </div>
+                  {tab === "tracks" && (
+                    <div className="row-actions">
+                      <button
+                        className="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadGpx(r.id, r.name).catch(setErr);
+                        }}
+                      >
+                        GPX
+                      </button>
+                      <button
+                        className="danger"
+                        disabled={busy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          run(() => deleteTrack(r.id));
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -46,6 +46,18 @@ export function structureFC(snap: Snapshot) {
   );
 }
 
+export function trackFC(snap: Snapshot) {
+  return fc(
+    snap.tracks
+      .filter((t) => t.geometry)
+      .map((t) => ({
+        type: "Feature" as const,
+        geometry: t.geometry as GeoJson,
+        properties: { id: t.id, kind: "track", source: t.source },
+      })),
+  );
+}
+
 function eachCoord(geom: GeoJson, cb: (lng: number, lat: number) => void) {
   const c = geom.coordinates as number[] | number[][] | number[][][];
   if (geom.type === "Point") cb((c as number[])[0], (c as number[])[1]);

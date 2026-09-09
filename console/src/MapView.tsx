@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import type { Snapshot } from "./api";
-import { boundsOf, structureFC, taskFC, trailFC } from "./geo";
+import { boundsOf, structureFC, taskFC, trackFC, trailFC } from "./geo";
 import type { Bounds } from "./geo";
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
@@ -47,6 +47,7 @@ export function MapView({
 
     map.on("load", () => {
       map.addSource("tk-trails", { type: "geojson", data: EMPTY });
+      map.addSource("tk-tracks", { type: "geojson", data: EMPTY });
       map.addSource("tk-tasks", { type: "geojson", data: EMPTY });
       map.addSource("tk-structures", { type: "geojson", data: EMPTY });
       map.addSource("tk-draft-line", { type: "geojson", data: EMPTY });
@@ -56,6 +57,13 @@ export function MapView({
         type: "line",
         source: "tk-trails",
         paint: { "line-color": "#3c5a31", "line-width": 3 },
+        layout: { "line-cap": "round", "line-join": "round" },
+      });
+      map.addLayer({
+        id: "tk-tracks-line",
+        type: "line",
+        source: "tk-tracks",
+        paint: { "line-color": "#6d4c9c", "line-width": 3, "line-dasharray": [1.5, 1] },
         layout: { "line-cap": "round", "line-join": "round" },
       });
       map.addLayer({
@@ -114,6 +122,7 @@ export function MapView({
     const map = mapRef.current;
     if (!map || !readyRef.current || !snapshot) return;
     (map.getSource("tk-trails") as maplibregl.GeoJSONSource)?.setData(trailFC(snapshot) as never);
+    (map.getSource("tk-tracks") as maplibregl.GeoJSONSource)?.setData(trackFC(snapshot) as never);
     (map.getSource("tk-tasks") as maplibregl.GeoJSONSource)?.setData(taskFC(snapshot) as never);
     (map.getSource("tk-structures") as maplibregl.GeoJSONSource)?.setData(
       structureFC(snapshot) as never,
@@ -122,6 +131,7 @@ export function MapView({
     if (fittedRef.current !== snapshot.project.id) {
       const b = boundsOf([
         ...snapshot.trails.map((t) => t.geometry),
+        ...snapshot.tracks.map((t) => t.geometry),
         ...snapshot.tasks.map((t) => t.geometry),
         ...snapshot.structures.map((s) => s.geometry),
       ]);
