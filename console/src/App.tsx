@@ -31,7 +31,7 @@ import { PhotoGallery } from "./TaskPhotos";
 import { MapView, type FocusTarget } from "./MapView";
 import { boundsOf, centerOf } from "./geo";
 
-type Tab = "tasks" | "trails" | "structures" | "tracks" | "discussion";
+type Tab = "tasks" | "trails" | "structures" | "tracks";
 type Mode =
   | { kind: "idle" }
   | { kind: "add-task" }
@@ -65,6 +65,9 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [tab, setTab] = useState<Tab>("tasks");
+  const [chatOpen, setChatOpen] = useState(
+    () => localStorage.getItem("tk_console_chat_open") === "1",
+  );
   const [selected, setSelected] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>({ kind: "idle" });
   const [focus, setFocus] = useState<FocusTarget | null>(null);
@@ -181,6 +184,12 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
     }
   }
 
+  const toggleChat = () =>
+    setChatOpen((o) => {
+      localStorage.setItem("tk_console_chat_open", o ? "0" : "1");
+      return !o;
+    });
+
   const drawing = mode.kind === "draw-trail";
   const picking =
     mode.kind === "add-task" ||
@@ -279,14 +288,14 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
       <div className="body">
         <div className="panel">
           <div className="tabs">
-            {(["tasks", "trails", "structures", "tracks", "discussion"] as Tab[]).map((t) => (
+            {(["tasks", "trails", "structures", "tracks"] as Tab[]).map((t) => (
               <button
                 key={t}
                 className={tab === t ? "active" : ""}
                 onClick={() => { setTab(t); setSelected(null); }}
               >
-                {t === "discussion" ? "Chat" : t[0].toUpperCase() + t.slice(1)}
-                {snapshot && t !== "discussion" ? ` (${(snapshot[t] as unknown[]).length})` : ""}
+                {t[0].toUpperCase() + t.slice(1)}
+                {snapshot ? ` (${(snapshot[t] as unknown[]).length})` : ""}
               </button>
             ))}
           </div>
@@ -297,19 +306,6 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
             </div>
           ) : !projectId ? (
             <div className="empty">Pick a project above.</div>
-          ) : tab === "discussion" ? (
-            !snapshot ? (
-              <div className="empty">Loading…</div>
-            ) : (
-              <Chat
-                title="Project discussion"
-                messages={snapshot.messages.filter((m) => m.task_id == null)}
-                members={snapshot.members}
-                busy={busy}
-                onPost={(body) => run(() => postMessage({ project_id: projectId, body }))}
-                onDelete={(id) => run(() => deleteMessage(id))}
-              />
-            )
           ) : selectedRow && tab !== "tracks" ? (
             <Detail
               tab={tab}
@@ -411,6 +407,35 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
             setSelected(kind === "track" ? null : id);
           }}
         />
+
+        <aside className={chatOpen ? "chatdock open" : "chatdock"}>
+          <button
+            className="chatdock-toggle"
+            onClick={toggleChat}
+            title={chatOpen ? "Collapse chat" : "Open chat"}
+          >
+            <span className="chatdock-icon" aria-hidden>💬</span>
+            {chatOpen && <span className="chatdock-label">Chat</span>}
+            <span className="chatdock-chevron" aria-hidden>{chatOpen ? "›" : "‹"}</span>
+          </button>
+          {chatOpen && (
+            <div className="chatdock-body">
+              {!projectId ? (
+                <div className="empty">Pick a project to chat.</div>
+              ) : !snapshot ? (
+                <div className="empty">Loading…</div>
+              ) : (
+                <Chat
+                  messages={snapshot.messages.filter((m) => m.task_id == null)}
+                  members={snapshot.members}
+                  busy={busy}
+                  onPost={(body) => run(() => postMessage({ project_id: projectId, body }))}
+                  onDelete={(id) => run(() => deleteMessage(id))}
+                />
+              )}
+            </div>
+          )}
+        </aside>
       </div>
 
       {mode.kind === "form-project" && (
@@ -671,7 +696,7 @@ function Chat({
   onPost,
   onDelete,
 }: {
-  title: string;
+  title?: string;
   messages: Message[];
   members: Member[];
   busy: boolean;
@@ -692,7 +717,7 @@ function Chat({
 
   return (
     <div className="chat">
-      <h3>{title}</h3>
+      {title && <h3>{title}</h3>}
       <div className="chat-list">
         {sorted.length === 0 && <div className="muted">No messages yet.</div>}
         {sorted.map((m) => (
