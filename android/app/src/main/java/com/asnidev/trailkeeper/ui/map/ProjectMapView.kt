@@ -24,6 +24,7 @@ import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
@@ -126,7 +127,14 @@ fun ProjectMap(
                     style.addLayer(
                         CircleLayer("$STRUCTURE_SRC-dot", STRUCTURE_SRC).withProperties(
                             PropertyFactory.circleRadius(6f),
-                            PropertyFactory.circleColor("#2F6D7A"),
+                            PropertyFactory.circleColor(
+                                Expression.toColor(
+                                    Expression.coalesce(
+                                        Expression.get("color"),
+                                        Expression.literal("#2F6D7A"),
+                                    )
+                                )
+                            ),
                             PropertyFactory.circleStrokeWidth(2f),
                             PropertyFactory.circleStrokeColor("#FFFFFF"),
                         )

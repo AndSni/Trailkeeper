@@ -146,6 +146,7 @@ fun StructureDto.toEntity() =
         geometryJson = geometry?.toString(),
         nearestTrailId = nearestTrailId,
         material = material,
+        color = color,
         installedOn = installedOn,
         inspectionIntervalDays = inspectionIntervalDays,
         notes = notes,

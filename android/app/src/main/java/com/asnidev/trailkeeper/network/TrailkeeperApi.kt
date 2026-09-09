@@ -72,6 +72,9 @@ interface TrailkeeperApi {
         @Body body: TaskCreateRequest,
     ): TaskDto
 
+    @DELETE("messages/{id}")
+    suspend fun deleteMessage(@Path("id") id: String): retrofit2.Response<Unit>
+
     @GET("notifications")
     suspend fun notifications(@Query("limit") limit: Int = 100): List<NotificationDto>
 

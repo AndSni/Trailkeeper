@@ -63,8 +63,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.asnidev.trailkeeper.network.StructurePatchRequest
 import com.asnidev.trailkeeper.ui.common.PointPickerScreen
 import com.asnidev.trailkeeper.ui.map.MapFocus
+import com.asnidev.trailkeeper.ui.structures.ColorPicker
 import com.asnidev.trailkeeper.ui.map.ProjectMap
 import com.asnidev.trailkeeper.ui.segments.SegmentWorkTab
 import com.asnidev.trailkeeper.ui.segments.SegmentWorkViewModel
@@ -120,6 +122,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
     var editingTask by remember { mutableStateOf<TaskEntity?>(null) }
     var movingTask by remember { mutableStateOf<TaskEntity?>(null) }
     var movingStructure by remember { mutableStateOf<StructureEntity?>(null) }
+    var discussingTask by remember { mutableStateOf<TaskEntity?>(null) }
 
     fun geomLatLon(json: String?): Pair<Double, Double>? =
         runCatching {
@@ -209,8 +212,21 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
             Box(Modifier.fillMaxSize()) {
                 val moveTask = movingTask
                 val moveStructure = movingStructure
+                val chatTask = discussingTask
                 when {
                     !s.loaded -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    chatTask != null -> {
+                        val rows by
+                            remember(chatTask.id) { vm.taskThread(chatTask.id) }
+                                .collectAsState(initial = emptyList())
+                        TaskDiscussionScreen(
+                            taskTitle = chatTask.title,
+                            messages = rows,
+                            onSend = { vm.postMessage(it, taskId = chatTask.id) },
+                            onDelete = vm::deleteMessage,
+                            onBack = { discussingTask = null },
+                        )
+                    }
                     moveTask != null ->
                         PointPickerScreen(
                             title = "Move \"${moveTask.title}\"",
@@ -255,7 +271,8 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                             focus = mapFocus,
                             onFeatureTap = { kind, id -> selected = kind to id },
                         )
-                    tab == 3 -> DiscussionTab(messages, onSend = vm::postMessage)
+                    tab == 3 ->
+                        DiscussionTab(messages, onSend = { vm.postMessage(it) }, onDelete = vm::deleteMessage)
                     tab == 4 -> SegmentWorkTab(workVm, s.trails, hasLocation)
                     tab == 5 -> StructuresTab(structuresVm, hasLocation)
                     else ->
@@ -304,12 +321,13 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                                     vm.setStatus(task.id, if (task.status == "done") "open" else "done")
                                 },
                                 onMove = { movingTask = task; selected = null },
+                                onDiscuss = { discussingTask = task; selected = null },
                             )
                         structure != null ->
                             StructureDetailBody(
                                 structure = structure,
                                 onShowOnMap = { focusOnMap(structure.geometryJson); selected = null },
-                                onSetStatus = { structuresVm.setStructureStatus(structure.id, it) },
+                                onPatch = { structuresVm.patchStructure(structure.id, it) },
                                 onMove = { movingStructure = structure; selected = null },
                                 onDelete = { structuresVm.deleteStructure(structure.id); selected = null },
                             )
@@ -361,6 +379,7 @@ private fun TaskDetailBody(
     onEdit: () -> Unit,
     onToggleDone: () -> Unit,
     onMove: () -> Unit,
+    onDiscuss: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         PriorityTag(task.priority)
@@ -374,6 +393,7 @@ private fun TaskDetailBody(
     if (task.description.isNotBlank()) Text(task.description, style = MaterialTheme.typography.bodyMedium)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onClick = onEdit) { Text("Edit") }
+        OutlinedButton(onClick = onDiscuss) { Text("Discussion") }
         OutlinedButton(onClick = onToggleDone) {
             Text(if (task.status == "done") "Reopen" else "Mark done")
         }
@@ -382,18 +402,62 @@ private fun TaskDetailBody(
     }
 }
 
+@Composable
+private fun TaskDiscussionScreen(
+    taskTitle: String,
+    messages: List<MessageRow>,
+    onSend: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onBack: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        Surface(tonalElevation = 2.dp) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+                Text(
+                    taskTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        DiscussionTab(messages = messages, onSend = onSend, onDelete = onDelete)
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StructureDetailBody(
     structure: StructureEntity,
     onShowOnMap: () -> Unit,
-    onSetStatus: (String) -> Unit,
+    onPatch: (StructurePatchRequest) -> Unit,
     onMove: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val statuses = listOf("good", "monitor", "needs_repair", "failed", "decommissioned")
     var confirmDelete by remember { mutableStateOf(false) }
-    Text(structure.name, style = MaterialTheme.typography.titleLarge)
+    var name by remember(structure.id) { mutableStateOf(structure.name) }
+
+    OutlinedTextField(
+        value = name,
+        onValueChange = { name = it },
+        label = { Text("Name") },
+        singleLine = true,
+        trailingIcon = {
+            if (name.isNotBlank() && name != structure.name) {
+                TextButton(onClick = { onPatch(StructurePatchRequest(name = name.trim())) }) {
+                    Text("Rename")
+                }
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
     Text(
         structure.structureType.replace('_', ' ') +
             (if (structure.material.isNotBlank()) " · ${structure.material}" else ""),
@@ -406,11 +470,13 @@ private fun StructureDetailBody(
         statuses.forEach { st ->
             FilterChip(
                 selected = structure.status == st,
-                onClick = { onSetStatus(st) },
+                onClick = { onPatch(StructurePatchRequest(status = st)) },
                 label = { Text(st.replace('_', ' ')) },
             )
         }
     }
+    Text("Marker colour", style = MaterialTheme.typography.labelLarge)
+    ColorPicker(selected = structure.color, onSelect = { onPatch(StructurePatchRequest(color = it)) })
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = onMove) {
             Text(if (structure.geometryJson == null) "Set location" else "Move")
@@ -644,7 +710,11 @@ private fun km(m: Double): String =
     if (m < 950) "${m.roundToInt()} m" else "${(m / 100).roundToInt() / 10.0} km"
 
 @Composable
-private fun DiscussionTab(messages: List<MessageRow>, onSend: (String) -> Unit) {
+private fun DiscussionTab(
+    messages: List<MessageRow>,
+    onSend: (String) -> Unit,
+    onDelete: (String) -> Unit = {},
+) {
     var draft by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
 
@@ -668,7 +738,7 @@ private fun DiscussionTab(messages: List<MessageRow>, onSend: (String) -> Unit) 
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(messages, key = { it.id }) { m -> MessageBubble(m) }
+                items(messages, key = { it.id }) { m -> MessageBubble(m, onDelete = { onDelete(m.id) }) }
             }
         }
 
@@ -708,19 +778,35 @@ private fun DiscussionTab(messages: List<MessageRow>, onSend: (String) -> Unit) 
 }
 
 @Composable
-private fun MessageBubble(m: MessageRow) {
+private fun MessageBubble(m: MessageRow, onDelete: () -> Unit) {
     val bg =
         if (m.mine) MaterialTheme.colorScheme.primaryContainer
         else MaterialTheme.colorScheme.surfaceVariant
+    var confirm by remember { mutableStateOf(false) }
     Column {
-        Text(
-            "${m.authorName} · ${formatTime(m.createdAt)}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "${m.authorName} · ${formatTime(m.createdAt)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (m.mine) {
+                TextButton(onClick = { confirm = true }, contentPadding = PaddingValues(horizontal = 6.dp)) {
+                    Text("Delete", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
         Surface(color = bg, shape = RoundedCornerShape(10.dp)) {
             Text(m.body, Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("Delete comment?") },
+            confirmButton = { TextButton(onClick = { confirm = false; onDelete() }) { Text("Delete") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+        )
     }
 }
 

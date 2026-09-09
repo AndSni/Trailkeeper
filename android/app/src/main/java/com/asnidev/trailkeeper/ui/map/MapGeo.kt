@@ -37,9 +37,10 @@ object MapGeo {
         featureCollection(
             structures.mapNotNull { s ->
                 s.geometryJson?.let { g ->
+                    val colorProp = if (s.color.isNotBlank()) ""","color":${quote(s.color)}""" else ""
                     feature(
                         g,
-                        """"id":${quote(s.id)},"kind":"structure","type":${quote(s.structureType)},"status":${quote(s.status)}""",
+                        """"id":${quote(s.id)},"kind":"structure","type":${quote(s.structureType)},"status":${quote(s.status)}$colorProp""",
                     )
                 }
             }

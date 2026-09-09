@@ -176,6 +176,13 @@ object SyncRepository {
         drainOutbox()
     }
 
+    /** Delete a message (author or admin). Online; also drops it from Room. */
+    suspend fun deleteMessage(id: String) {
+        val resp = ApiClient.api().deleteMessage(id)
+        if (!resp.isSuccessful && resp.code() != 404) error("Delete failed (${resp.code()})")
+        db.messageDao().deleteById(id)
+    }
+
     /** Save a timed segment. Online-only for now (the timer runs on the phone,
      * saves on stop); the authoritative row is folded straight into Room. */
     suspend fun logSegmentWork(req: SegmentWorkCreateRequest) {

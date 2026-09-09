@@ -29,6 +29,8 @@ val STRUCTURE_TYPES = listOf(
 )
 val STRUCTURE_STATUSES = listOf("good", "monitor", "needs_repair", "failed", "decommissioned")
 val INSPECTION_RISKS = listOf("low", "medium", "high", "critical")
+// "" = client default; the rest are picker presets.
+val STRUCTURE_COLORS = listOf("", "#2F6D7A", "#4C6B3C", "#B7791F", "#B23B3B", "#8A6A4A", "#5C6450")
 
 private val gson = Gson()
 private val FIELD_LIST = object : TypeToken<List<InspectionFieldDto>>() {}.type
@@ -72,6 +74,7 @@ class StructuresViewModel(private val projectId: String) : ViewModel() {
         type: String,
         material: String,
         notes: String,
+        color: String,
         lat: Double?,
         lon: Double?,
     ) {
@@ -84,6 +87,7 @@ class StructuresViewModel(private val projectId: String) : ViewModel() {
                         structureType = type,
                         material = material.trim(),
                         notes = notes.trim(),
+                        color = color,
                         lat = lat,
                         lon = lon,
                     )
@@ -91,6 +95,13 @@ class StructuresViewModel(private val projectId: String) : ViewModel() {
             }
                 .onFailure { e -> _message.value = e.message ?: "Couldn't create the structure" }
             _saving.value = false
+        }
+    }
+
+    fun patchStructure(id: String, req: StructurePatchRequest) {
+        viewModelScope.launch {
+            runCatching { SyncRepository.updateStructure(id, req) }
+                .onFailure { e -> _message.value = e.message ?: "Couldn't update the structure" }
         }
     }
 

@@ -157,6 +157,7 @@ data class StructureDto(
     val geometry: JsonElement?, // GeoJSON Point, or null
     @SerializedName("nearest_trail_id") val nearestTrailId: String?,
     val material: String,
+    val color: String = "",
     @SerializedName("installed_on") val installedOn: String?,
     @SerializedName("inspection_interval_days") val inspectionIntervalDays: Int?,
     val notes: String,
@@ -255,6 +256,7 @@ data class StructureCreateRequest(
     val lat: Double? = null,
     val lon: Double? = null,
     val material: String = "",
+    val color: String = "",
     val notes: String = "",
 )
 
@@ -265,6 +267,7 @@ data class StructurePatchRequest(
     val lat: Double? = null,
     val lon: Double? = null,
     val material: String? = null,
+    val color: String? = null,
     val notes: String? = null,
 )
 

@@ -24,7 +24,7 @@ import androidx.room.RoomDatabase
         InspectionEntity::class,
         TrackEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class TrailkeeperDb : RoomDatabase() {

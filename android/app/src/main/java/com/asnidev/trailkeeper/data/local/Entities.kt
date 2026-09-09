@@ -164,6 +164,7 @@ data class StructureEntity(
     val geometryJson: String?,
     val nearestTrailId: String?,
     val material: String,
+    val color: String,
     val installedOn: String?,
     val inspectionIntervalDays: Int?,
     val notes: String,

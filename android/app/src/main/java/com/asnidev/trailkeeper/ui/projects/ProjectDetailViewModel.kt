@@ -7,7 +7,10 @@ import com.asnidev.trailkeeper.data.SyncRepository
 import com.asnidev.trailkeeper.data.local.ProjectEntity
 import com.asnidev.trailkeeper.data.local.TaskEntity
 import com.asnidev.trailkeeper.data.local.TrailEntity
+import com.asnidev.trailkeeper.data.local.MessageEntity
+import com.asnidev.trailkeeper.data.local.ProjectMemberEntity
 import com.asnidev.trailkeeper.data.local.TrailkeeperDb
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,24 +50,33 @@ class ProjectDetailViewModel(private val projectId: String) : ViewModel() {
     private val myId = Session.currentUserId()
     private val sync = MutableStateFlow(SyncStatus())
 
+    private fun toRows(messages: List<MessageEntity>, members: List<ProjectMemberEntity>): List<MessageRow> {
+        val names = members.associate { it.userId to it.name }
+        return messages.map { m ->
+            MessageRow(
+                id = m.id,
+                authorName = names[m.authorId] ?: "Someone",
+                body = m.body,
+                createdAt = m.createdAt,
+                mine = m.authorId != null && m.authorId == myId,
+            )
+        }
+    }
+
     /** The project's own discussion thread, resolved to author names. */
     val discussion: StateFlow<List<MessageRow>> =
         combine(
             db.messageDao().observeThread(projectId, null),
             db.projectMemberDao().observeForProject(projectId),
-        ) { messages, members ->
-            val names = members.associate { it.userId to it.name }
-            messages.map { m ->
-                MessageRow(
-                    id = m.id,
-                    authorName = names[m.authorId] ?: "Someone",
-                    body = m.body,
-                    createdAt = m.createdAt,
-                    mine = m.authorId != null && m.authorId == myId,
-                )
-            }
-        }
+        ) { messages, members -> toRows(messages, members) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** One task's own comment thread. */
+    fun taskThread(taskId: String): Flow<List<MessageRow>> =
+        combine(
+            db.messageDao().observeThread(projectId, taskId),
+            db.projectMemberDao().observeForProject(projectId),
+        ) { messages, members -> toRows(messages, members) }
 
     val state: StateFlow<ProjectDetailUiState> =
         combine(
@@ -141,12 +153,19 @@ class ProjectDetailViewModel(private val projectId: String) : ViewModel() {
         }
     }
 
-    fun postMessage(body: String) {
+    fun postMessage(body: String, taskId: String? = null) {
         val text = body.trim()
         if (text.isEmpty()) return
         viewModelScope.launch {
-            runCatching { SyncRepository.postMessage(projectId, taskId = null, body = text) }
+            runCatching { SyncRepository.postMessage(projectId, taskId = taskId, body = text) }
                 .onFailure { e -> sync.update { it.copy(error = e.message ?: "Couldn't send") } }
+        }
+    }
+
+    fun deleteMessage(id: String) {
+        viewModelScope.launch {
+            runCatching { SyncRepository.deleteMessage(id) }
+                .onFailure { e -> sync.update { it.copy(error = e.message ?: "Couldn't delete") } }
         }
     }
 }

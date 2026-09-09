@@ -2,6 +2,7 @@ package com.asnidev.trailkeeper.ui.structures
 
 import android.annotation.SuppressLint
 import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,6 +80,7 @@ fun StructuresTab(vm: StructuresViewModel, hasLocation: Boolean) {
     var addType by remember { mutableStateOf("culvert") }
     var addMaterial by remember { mutableStateOf("") }
     var addNotes by remember { mutableStateOf("") }
+    var addColor by remember { mutableStateOf("") }
     var addPoint by remember { mutableStateOf<Pair<Double, Double>?>(null) }
 
     if (addMode == "picking") {
@@ -97,14 +99,19 @@ fun StructuresTab(vm: StructuresViewModel, hasLocation: Boolean) {
             type = addType, onType = { addType = it },
             material = addMaterial, onMaterial = { addMaterial = it },
             notes = addNotes, onNotes = { addNotes = it },
+            color = addColor, onColor = { addColor = it },
             point = addPoint,
             saving = saving,
             onPickOnMap = { addMode = "picking" },
             onClearPoint = { addPoint = null },
             onCancel = { addMode = "none" },
             onCreate = {
-                vm.addStructure(addName, addType, addMaterial, addNotes, addPoint?.first, addPoint?.second)
-                addName = ""; addType = "culvert"; addMaterial = ""; addNotes = ""; addPoint = null
+                vm.addStructure(
+                    addName, addType, addMaterial, addNotes, addColor,
+                    addPoint?.first, addPoint?.second,
+                )
+                addName = ""; addType = "culvert"; addMaterial = ""; addNotes = ""
+                addColor = ""; addPoint = null
                 addMode = "none"
             },
         )
@@ -297,12 +304,14 @@ private fun InspectionCard(i: InspectionEntity) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AddStructureForm(
     name: String, onName: (String) -> Unit,
     type: String, onType: (String) -> Unit,
     material: String, onMaterial: (String) -> Unit,
     notes: String, onNotes: (String) -> Unit,
+    color: String, onColor: (String) -> Unit,
     point: Pair<Double, Double>?,
     saving: Boolean,
     onPickOnMap: () -> Unit,
@@ -348,6 +357,8 @@ private fun AddStructureForm(
             maxLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        Text("Marker colour", style = MaterialTheme.typography.labelLarge)
+        ColorPicker(selected = color, onSelect = onColor)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onPickOnMap) {
                 Text(if (point == null) "Place on map" else "Change location")
@@ -530,6 +541,26 @@ private fun FormField(
                 maxLines = 3,
                 modifier = Modifier.fillMaxWidth(),
             )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ColorPicker(selected: String, onSelect: (String) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        STRUCTURE_COLORS.forEach { hex ->
+            val chosen = hex == selected
+            if (hex.isBlank()) {
+                FilterChip(selected = chosen, onClick = { onSelect("") }, label = { Text("default") })
+            } else {
+                androidx.compose.material3.Surface(
+                    color = Color(android.graphics.Color.parseColor(hex)),
+                    shape = RoundedCornerShape(50),
+                    border = if (chosen) androidx.compose.foundation.BorderStroke(3.dp, MaterialTheme.colorScheme.onSurface) else null,
+                    modifier = Modifier.size(34.dp).clickable { onSelect(hex) },
+                ) {}
+            }
+        }
     }
 }
 
