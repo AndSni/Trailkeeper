@@ -20,6 +20,15 @@ object NotificationRepository {
 
     fun all(): Flow<List<NotificationEntity>> = db.notificationDao().observeAll()
 
+    /** Task ids that have at least one unread notification (e.g. a new comment). */
+    fun unreadTaskIds(): Flow<List<String>> = db.notificationDao().observeUnreadTaskIds()
+
+    /** Clear the unread flag for one task's notifications (call when its thread is opened). */
+    suspend fun markTaskRead(taskId: String) {
+        val ids = db.notificationDao().unreadIdsForTask(taskId)
+        markRead(ids)
+    }
+
     suspend fun refresh() {
         val fresh = ApiClient.api().notifications()
         db.notificationDao().upsertAll(fresh.map { it.toEntity() })

@@ -1,10 +1,14 @@
 package com.asnidev.trailkeeper.network
 
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -74,6 +78,20 @@ interface TrailkeeperApi {
         @Query("project_id") projectId: String,
         @Body body: TaskCreateRequest,
     ): TaskDto
+
+    @Multipart
+    @POST("tasks/{id}/photos")
+    suspend fun uploadTaskPhoto(
+        @Path("id") taskId: String,
+        @Part file: MultipartBody.Part,
+        @Part("caption") caption: RequestBody,
+    ): TaskPhotoDto
+
+    @DELETE("tasks/{taskId}/photos/{photoId}")
+    suspend fun deleteTaskPhoto(
+        @Path("taskId") taskId: String,
+        @Path("photoId") photoId: String,
+    ): retrofit2.Response<Unit>
 
     @DELETE("messages/{id}")
     suspend fun deleteMessage(@Path("id") id: String): retrofit2.Response<Unit>

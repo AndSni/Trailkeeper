@@ -62,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -117,6 +118,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
             .collectAsState(initial = emptyList())
     val messages by vm.discussion.collectAsState()
     val commentCounts by vm.taskCommentCounts.collectAsState()
+    val unreadCommentTasks by vm.unreadCommentTasks.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showAdd by remember { mutableStateOf(false) }
 
@@ -258,6 +260,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                         TaskList(
                             s.tasks,
                             commentCounts = commentCounts,
+                            unreadTasks = unreadCommentTasks,
                             onSetStatus = vm::setStatus,
                             onOpen = { t -> selected = "task" to t.id; focusOnMap(t.geometryJson) },
                         )
@@ -334,7 +337,13 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                                     vm.setStatus(task.id, if (task.status == "done") "open" else "done")
                                 },
                                 onMove = { movingTask = task; selected = null },
-                                onDiscuss = { discussingTask = task; selected = null },
+                                onDiscuss = {
+                                    vm.markTaskCommentsRead(task.id)
+                                    discussingTask = task
+                                    selected = null
+                                },
+                                onUploadPhoto = { file -> vm.uploadTaskPhoto(task.id, file) },
+                                onDeletePhoto = { photoId -> vm.deleteTaskPhoto(task.id, photoId) },
                             )
                         structure != null ->
                             StructureDetailBody(
@@ -393,7 +402,10 @@ private fun TaskDetailBody(
     onToggleDone: () -> Unit,
     onMove: () -> Unit,
     onDiscuss: () -> Unit,
+    onUploadPhoto: (java.io.File) -> Unit,
+    onDeletePhoto: (String) -> Unit,
 ) {
+    var viewingPhoto by remember { mutableStateOf<String?>(null) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         PriorityTag(task.priority)
         Text(task.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp))
@@ -404,6 +416,13 @@ private fun TaskDetailBody(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     if (task.description.isNotBlank()) Text(task.description, style = MaterialTheme.typography.bodyMedium)
+    TaskPhotoStrip(
+        task = task,
+        onUpload = onUploadPhoto,
+        onDelete = onDeletePhoto,
+        onOpen = { viewingPhoto = it },
+    )
+    viewingPhoto?.let { url -> PhotoViewerDialog(url = url, onClose = { viewingPhoto = null }) }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onClick = onEdit) { Text("Edit") }
         OutlinedButton(onClick = onDiscuss) { Text("Discussion") }
@@ -563,6 +582,7 @@ private fun EditTaskDialog(
 private fun TaskList(
     tasks: List<TaskEntity>,
     commentCounts: Map<String, Int>,
+    unreadTasks: Set<String>,
     onSetStatus: (String, String) -> Unit,
     onOpen: (TaskEntity) -> Unit,
 ) {
@@ -579,6 +599,10 @@ private fun TaskList(
             val photos = jsonArraySize(t.photosJson)
             val assignees = jsonArraySize(t.assigneeIdsJson)
             val comments = commentCounts[t.id] ?: 0
+            val unread = t.id in unreadTasks
+            val commentTint =
+                if (unread) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
             Card(onClick = { onOpen(t) }, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -592,14 +616,15 @@ private fun TaskList(
                             Spacer(Modifier.weight(1f))
                             Icon(
                                 Icons.AutoMirrored.Filled.Comment,
-                                contentDescription = "Comments",
+                                contentDescription = if (unread) "Unread comments" else "Comments",
                                 modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = commentTint,
                             )
                             Text(
                                 " $comments",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = if (unread) FontWeight.Bold else null,
+                                color = commentTint,
                             )
                         }
                     }

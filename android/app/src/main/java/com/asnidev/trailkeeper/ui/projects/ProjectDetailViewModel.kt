@@ -2,6 +2,7 @@ package com.asnidev.trailkeeper.ui.projects
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.asnidev.trailkeeper.data.NotificationRepository
 import com.asnidev.trailkeeper.data.Session
 import com.asnidev.trailkeeper.data.SyncRepository
 import com.asnidev.trailkeeper.record.TrackRecorder
@@ -80,6 +81,12 @@ class ProjectDetailViewModel(private val projectId: String) : ViewModel() {
             .map { list -> list.associate { it.taskId to it.count } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /** Task ids with an unread comment notification - drives the accent tint on the tile. */
+    val unreadCommentTasks: StateFlow<Set<String>> =
+        NotificationRepository.unreadTaskIds()
+            .map { it.toSet() }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
     /** One task's own comment thread. */
     fun taskThread(taskId: String): Flow<List<MessageRow>> =
         combine(
@@ -111,6 +118,32 @@ class ProjectDetailViewModel(private val projectId: String) : ViewModel() {
 
     init {
         refresh()
+        viewModelScope.launch { runCatching { NotificationRepository.refresh() } }
+    }
+
+    /** Called when a task's comment thread is opened - drops its unread accent. */
+    fun markTaskCommentsRead(taskId: String) {
+        viewModelScope.launch { runCatching { NotificationRepository.markTaskRead(taskId) } }
+    }
+
+    fun uploadTaskPhoto(taskId: String, jpeg: java.io.File) {
+        viewModelScope.launch {
+            runCatching { SyncRepository.uploadTaskPhoto(taskId, jpeg, "") }
+                .onSuccess { refresh() }
+                .onFailure { e ->
+                    sync.update { it.copy(error = e.message ?: "Couldn't upload the photo") }
+                }
+        }
+    }
+
+    fun deleteTaskPhoto(taskId: String, photoId: String) {
+        viewModelScope.launch {
+            runCatching { SyncRepository.deleteTaskPhoto(taskId, photoId) }
+                .onSuccess { refresh() }
+                .onFailure { e ->
+                    sync.update { it.copy(error = e.message ?: "Couldn't delete the photo") }
+                }
+        }
     }
 
     fun refresh() {

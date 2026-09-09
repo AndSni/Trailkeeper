@@ -35,6 +35,9 @@ import com.asnidev.trailkeeper.network.WorkLogDto
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.reflect.TypeToken
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -136,6 +139,25 @@ object SyncRepository {
             ),
         )
         drainOutbox()
+    }
+
+    /** Upload a (already-compressed) JPEG to a task. Online; the server logs
+     * a task change so a follow-up sync folds the new photo in. */
+    suspend fun uploadTaskPhoto(taskId: String, jpeg: java.io.File, caption: String) {
+        val part =
+            okhttp3.MultipartBody.Part.createFormData(
+                "file",
+                jpeg.name,
+                jpeg.asRequestBody("image/jpeg".toMediaType()),
+            )
+        val cap = caption.toRequestBody("text/plain".toMediaType())
+        ApiClient.api().uploadTaskPhoto(taskId, part, cap)
+        jpeg.delete()
+    }
+
+    suspend fun deleteTaskPhoto(taskId: String, photoId: String) {
+        val resp = ApiClient.api().deleteTaskPhoto(taskId, photoId)
+        if (!resp.isSuccessful && resp.code() != 404) error("Delete failed (${resp.code()})")
     }
 
     /** Move a task's map point. Optimistic + queued (server re-attaches the

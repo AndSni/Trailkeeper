@@ -99,6 +99,18 @@ object ApiClient {
     @Volatile private var resolvedApi: TrailkeeperApi? = null
     private val resolveMutex = Mutex()
 
+    /** Base URL the API resolved to (trailing slash), or null before first use. */
+    val currentBaseUrl: String?
+        get() = resolvedCandidate?.baseUrl
+
+    /** Absolute URL for a server-relative [path] (e.g. a task-photo `url`). */
+    fun absoluteUrl(path: String): String? =
+        currentBaseUrl?.let { it.trimEnd('/') + "/" + path.trimStart('/') }
+
+    /** The authenticated OkHttp client - shared with Coil for task photos. */
+    val httpClient: OkHttpClient
+        get() = client
+
     private val probeClient =
         OkHttpClient.Builder()
             .connectTimeout(2, TimeUnit.SECONDS)

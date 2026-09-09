@@ -104,6 +104,12 @@ async function apiVoid(path: string, init: RequestInit = {}): Promise<void> {
   await request(path, init);
 }
 
+/** Fetches an authenticated image and returns an object URL (caller revokes it). */
+export async function fetchObjectUrl(path: string): Promise<string> {
+  const blob = await (await request(path, {})).blob();
+  return URL.createObjectURL(blob);
+}
+
 const jsonInit = (method: string, body: unknown): RequestInit => ({
   method,
   headers: { "Content-Type": "application/json" },
@@ -132,12 +138,19 @@ export interface Trail {
   geometry: GeoJson | null;
 }
 
+export interface TaskPhoto {
+  id: string;
+  caption: string;
+  url: string;
+}
+
 export interface Task {
   id: string;
   title: string;
   status: string;
   priority: string;
   geometry: GeoJson | null;
+  photos: TaskPhoto[];
 }
 
 export interface Structure {

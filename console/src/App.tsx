@@ -26,6 +26,7 @@ import {
   type Snapshot,
 } from "./api";
 import { Login } from "./Login";
+import { PhotoGallery } from "./TaskPhotos";
 import { MapView, type FocusTarget } from "./MapView";
 import { boundsOf, centerOf } from "./geo";
 
@@ -639,6 +640,8 @@ function Detail({
         )}
         <button className="danger" disabled={busy} onClick={onDelete}>Delete</button>
       </div>
+
+      {task && <PhotoGallery photos={task.photos} />}
 
       {task && (
         <div style={{ marginTop: 16 }}>

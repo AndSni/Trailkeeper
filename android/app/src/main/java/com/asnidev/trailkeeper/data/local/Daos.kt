@@ -188,6 +188,18 @@ interface NotificationDao {
     @Query("SELECT COUNT(*) FROM notifications WHERE readAt IS NULL")
     fun observeUnreadCount(): Flow<Int>
 
+    @Query(
+        "SELECT DISTINCT subjectId FROM notifications " +
+            "WHERE subjectType = 'task' AND readAt IS NULL"
+    )
+    fun observeUnreadTaskIds(): Flow<List<String>>
+
+    @Query(
+        "SELECT id FROM notifications " +
+            "WHERE subjectType = 'task' AND subjectId = :taskId AND readAt IS NULL"
+    )
+    suspend fun unreadIdsForTask(taskId: String): List<String>
+
     @Query("UPDATE notifications SET readAt = :ts WHERE id IN (:ids)")
     suspend fun markRead(ids: List<String>, ts: String)
 
