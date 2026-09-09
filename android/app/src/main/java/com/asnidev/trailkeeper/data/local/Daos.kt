@@ -125,6 +125,21 @@ interface InspectionDao {
 }
 
 @Dao
+interface TrackDao {
+    @Upsert suspend fun upsertAll(rows: List<TrackEntity>)
+
+    @Upsert suspend fun upsert(row: TrackEntity)
+
+    @Query("SELECT * FROM tracks WHERE projectId = :projectId ORDER BY startedAt DESC")
+    fun observeForProject(projectId: String): Flow<List<TrackEntity>>
+
+    @Query("DELETE FROM tracks WHERE id = :id") suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM tracks WHERE projectId = :projectId")
+    suspend fun deleteForProject(projectId: String)
+}
+
+@Dao
 interface ProjectMemberDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(rows: List<ProjectMemberEntity>)
 

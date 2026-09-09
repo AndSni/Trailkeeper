@@ -193,6 +193,45 @@ data class InspectionDto(
     val notes: String,
 )
 
+data class TrackDto(
+    val id: String,
+    @SerializedName("project_id") val projectId: String,
+    val name: String,
+    val activity: String,
+    val source: String,
+    @SerializedName("started_at") val startedAt: String?,
+    @SerializedName("ended_at") val endedAt: String?,
+    @SerializedName("moving_seconds") val movingSeconds: Int,
+    @SerializedName("length_m") val lengthM: Double,
+    @SerializedName("point_count") val pointCount: Int,
+    val geometry: JsonElement?, // GeoJSON LineString
+    @SerializedName("recorded_by_id") val recordedById: String?,
+)
+
+data class TrackPointDto(
+    val lat: Double,
+    val lon: Double,
+    val ele: Double? = null,
+    val t: String? = null,
+)
+
+data class TaskCreateRequest(
+    val title: String,
+    val priority: String = "medium",
+    val lat: Double? = null,
+    val lon: Double? = null,
+)
+
+data class TrackCreateRequest(
+    @SerializedName("project_id") val projectId: String,
+    val name: String,
+    val activity: String = "mtb",
+    @SerializedName("started_at") val startedAt: String?,
+    @SerializedName("ended_at") val endedAt: String?,
+    @SerializedName("moving_seconds") val movingSeconds: Int,
+    val points: List<TrackPointDto>,
+)
+
 data class SnapshotDto(
     val project: ProjectDto,
     val members: List<ProjectMemberDto> = emptyList(),
@@ -205,6 +244,7 @@ data class SnapshotDto(
     val structures: List<StructureDto> = emptyList(),
     @SerializedName("inspection_forms") val inspectionForms: List<InspectionFormDto> = emptyList(),
     val inspections: List<InspectionDto> = emptyList(),
+    val tracks: List<TrackDto> = emptyList(),
     @SerializedName("high_seq") val highSeq: Long,
 )
 

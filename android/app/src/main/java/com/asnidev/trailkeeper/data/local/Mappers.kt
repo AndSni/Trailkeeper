@@ -9,6 +9,7 @@ import com.asnidev.trailkeeper.network.ProjectDto
 import com.asnidev.trailkeeper.network.ProjectMemberDto
 import com.asnidev.trailkeeper.network.SegmentWorkDto
 import com.asnidev.trailkeeper.network.StructureDto
+import com.asnidev.trailkeeper.network.TrackDto
 import com.asnidev.trailkeeper.network.TaskDto
 import com.asnidev.trailkeeper.network.TrailDto
 import com.asnidev.trailkeeper.network.WorkLogDto
@@ -163,6 +164,22 @@ fun InspectionDto.toEntity() =
         risk = risk,
         condition = condition,
         notes = notes,
+    )
+
+fun TrackDto.toEntity() =
+    TrackEntity(
+        id = id,
+        projectId = projectId,
+        name = name,
+        activity = activity,
+        source = source,
+        startedAt = startedAt,
+        endedAt = endedAt,
+        movingSeconds = movingSeconds,
+        lengthM = lengthM,
+        pointCount = pointCount,
+        geometryJson = geometry?.toString(),
+        recordedById = recordedById,
     )
 
 fun NotificationDto.toEntity() =

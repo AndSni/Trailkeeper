@@ -21,6 +21,9 @@ import com.asnidev.trailkeeper.network.SegmentWorkCreateRequest
 import com.asnidev.trailkeeper.network.SegmentWorkDto
 import com.asnidev.trailkeeper.network.StructureCreateRequest
 import com.asnidev.trailkeeper.network.StructureDto
+import com.asnidev.trailkeeper.network.TaskCreateRequest
+import com.asnidev.trailkeeper.network.TrackCreateRequest
+import com.asnidev.trailkeeper.network.TrackDto
 import com.asnidev.trailkeeper.network.SyncChangeDto
 import com.asnidev.trailkeeper.network.SyncOpRequest
 import com.asnidev.trailkeeper.network.SyncPushRequest
@@ -156,6 +159,21 @@ object SyncRepository {
         db.inspectionDao().upsert(dto.toEntity())
     }
 
+    /** Save a recorded route (online). The full point list goes up once; only
+     * geometry + metadata come back and land in Room. */
+    suspend fun saveTrack(req: TrackCreateRequest): TrackDto {
+        val dto = ApiClient.api().createTrack(req)
+        db.trackDao().upsert(dto.toEntity())
+        return dto
+    }
+
+    /** Drop a task at a location (online) - used for "mark spot" while
+     * recording, which the offline outbox path can't carry a point for. */
+    suspend fun createTaskAt(projectId: String, title: String, priority: String, lat: Double, lon: Double) {
+        val dto = ApiClient.api().createTask(projectId, TaskCreateRequest(title, priority, lat, lon))
+        db.taskDao().upsert(dto.toEntity())
+    }
+
     private suspend fun enqueue(
         entityType: String,
         entityId: String,
@@ -248,6 +266,8 @@ object SyncRepository {
             db.inspectionFormDao().upsertAll(snap.inspectionForms.map { it.toEntity() })
             db.inspectionDao().deleteForProject(projectId)
             db.inspectionDao().upsertAll(snap.inspections.map { it.toEntity() })
+            db.trackDao().deleteForProject(projectId)
+            db.trackDao().upsertAll(snap.tracks.map { it.toEntity() })
             db.syncStateDao().markProjectSnapshotted(ProjectSyncEntity(projectId, snap.highSeq))
         }
     }
@@ -314,6 +334,9 @@ object SyncRepository {
                 else
                     db.inspectionDao()
                         .upsert(gson.fromJson(row, InspectionDto::class.java).toEntity())
+            "track" ->
+                if (c.op == "delete" || row == null) db.trackDao().deleteById(c.entityId)
+                else db.trackDao().upsert(gson.fromJson(row, TrackDto::class.java).toEntity())
         }
     }
 

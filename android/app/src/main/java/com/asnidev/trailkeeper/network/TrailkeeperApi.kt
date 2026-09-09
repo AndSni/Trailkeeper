@@ -51,6 +51,15 @@ interface TrailkeeperApi {
     @POST("inspections")
     suspend fun createInspection(@Body body: InspectionCreateRequest): InspectionDto
 
+    @POST("tracks")
+    suspend fun createTrack(@Body body: TrackCreateRequest): TrackDto
+
+    @POST("tasks")
+    suspend fun createTask(
+        @Query("project_id") projectId: String,
+        @Body body: TaskCreateRequest,
+    ): TaskDto
+
     @GET("notifications")
     suspend fun notifications(@Query("limit") limit: Int = 100): List<NotificationDto>
 

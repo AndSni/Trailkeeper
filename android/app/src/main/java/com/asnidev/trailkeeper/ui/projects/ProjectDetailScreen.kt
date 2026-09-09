@@ -39,7 +39,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -63,6 +63,7 @@ import androidx.core.content.ContextCompat
 import com.asnidev.trailkeeper.ui.map.ProjectMap
 import com.asnidev.trailkeeper.ui.segments.SegmentWorkTab
 import com.asnidev.trailkeeper.ui.segments.SegmentWorkViewModel
+import com.asnidev.trailkeeper.ui.record.RouteTab
 import com.asnidev.trailkeeper.ui.structures.StructuresTab
 import com.asnidev.trailkeeper.ui.structures.StructuresViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -110,9 +111,14 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             hasLocation = it
         }
+    val requestNotifications =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(tab) {
-        if ((tab == 2 || tab == 5) && !hasLocation) {
+        if ((tab == 2 || tab == 5 || tab == 6) && !hasLocation) {
             requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        if (tab == 6 && android.os.Build.VERSION.SDK_INT >= 33) {
+            requestNotifications.launch("android.permission.POST_NOTIFICATIONS")
         }
     }
 
@@ -156,13 +162,14 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                 }
             }
 
-            TabRow(selectedTabIndex = tab) {
+            ScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Tasks (${s.tasks.size})") })
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Trails (${s.trails.size})") })
                 Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Map") })
                 Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Discussion") })
                 Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Work") })
                 Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("Structures") })
+                Tab(selected = tab == 6, onClick = { tab = 6 }, text = { Text("Route") })
             }
 
             Box(Modifier.fillMaxSize()) {
@@ -180,7 +187,13 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                         )
                     tab == 3 -> DiscussionTab(messages, onSend = vm::postMessage)
                     tab == 4 -> SegmentWorkTab(workVm, s.trails)
-                    else -> StructuresTab(structuresVm, hasLocation)
+                    tab == 5 -> StructuresTab(structuresVm, hasLocation)
+                    else ->
+                        RouteTab(
+                            projectId = projectId,
+                            activity = s.project?.activity ?: "mtb",
+                            hasLocation = hasLocation,
+                        )
                 }
             }
         }

@@ -22,8 +22,9 @@ import androidx.room.RoomDatabase
         StructureEntity::class,
         InspectionFormEntity::class,
         InspectionEntity::class,
+        TrackEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class TrailkeeperDb : RoomDatabase() {
@@ -41,6 +42,7 @@ abstract class TrailkeeperDb : RoomDatabase() {
     abstract fun structureDao(): StructureDao
     abstract fun inspectionFormDao(): InspectionFormDao
     abstract fun inspectionDao(): InspectionDao
+    abstract fun trackDao(): TrackDao
 
     companion object {
         @Volatile private var built: TrailkeeperDb? = null

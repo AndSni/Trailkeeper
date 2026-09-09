@@ -198,6 +198,24 @@ data class InspectionEntity(
     val notes: String,
 )
 
+/** A recorded or imported GPX route. Geometry kept as raw GeoJSON for the
+ * map; the per-point detail lives only on the server (fetch via GPX). */
+@Entity(tableName = "tracks")
+data class TrackEntity(
+    @PrimaryKey val id: String,
+    val projectId: String,
+    val name: String,
+    val activity: String,
+    val source: String,
+    val startedAt: String?,
+    val endedAt: String?,
+    val movingSeconds: Int,
+    val lengthM: Double,
+    val pointCount: Int,
+    val geometryJson: String?,
+    val recordedById: String?,
+)
+
 /**
  * A pending offline write, queued for `POST /sync/push`. Rows are drained
  * before every pull; each carries the fields as a JSON object and the

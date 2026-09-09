@@ -157,6 +157,23 @@ Android Room outbox). This slice is the backend the field app pulls from.
 - Synced (snapshot + changes) as metadata + geometry only; the raw `points`
   are fetched on demand, never in the sync stream
 
+## What Phase 3 covers (Android) - route recording
+
+- **Route tab** on the project screen. "Start recording" launches
+  `TrackRecordingService` - a foreground service (`foregroundServiceType=
+  location`) that keeps fused-location updates running with the app
+  backgrounded and shows an ongoing notification with Pause / Resume / Stop
+- `TrackRecorder` (a singleton, like `Session`) holds the live state: phase,
+  points, distance (haversine, with an accuracy + jitter filter), un-paused
+  elapsed time
+- **Mark spot** during a recording drops a task at the current GPS point
+  (`POST /tasks`, online)
+- **Stop** -> name the route -> `POST /tracks` with the full point list; the
+  row lands in Room and the raw points stay server-side
+- Recorded routes ride the sync stream (Room v6); the tab lists them with
+  distance / point count / date. GPX *export from the app* and drawing a
+  recorded route on the map are later slices
+
 ## What Phase 2 covers (backend)
 
 - **Discussion** - the project's own thread + one per task (`task_id` null vs
