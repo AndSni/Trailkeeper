@@ -153,6 +153,8 @@ interface ProjectMemberDao {
     suspend fun deleteForProject(projectId: String)
 }
 
+data class TaskCommentCount(val taskId: String, val count: Int)
+
 @Dao
 interface MessageDao {
     @Upsert suspend fun upsertAll(rows: List<MessageEntity>)
@@ -163,6 +165,12 @@ interface MessageDao {
         "SELECT * FROM messages WHERE projectId = :projectId AND taskId IS :taskId ORDER BY createdAt"
     )
     fun observeThread(projectId: String, taskId: String?): Flow<List<MessageEntity>>
+
+    @Query(
+        "SELECT taskId AS taskId, COUNT(*) AS count FROM messages " +
+            "WHERE projectId = :projectId AND taskId IS NOT NULL GROUP BY taskId"
+    )
+    fun observeTaskCommentCounts(projectId: String): Flow<List<TaskCommentCount>>
 
     @Query("DELETE FROM messages WHERE id = :id") suspend fun deleteById(id: String)
 

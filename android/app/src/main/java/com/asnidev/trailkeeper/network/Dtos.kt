@@ -223,6 +223,15 @@ data class TaskCreateRequest(
     val lon: Double? = null,
 )
 
+data class TrailCreateRequest(
+    val name: String,
+    val activity: String = "mtb",
+    val difficulty: String = "",
+    val status: String = "open",
+    // [lat, lon] pairs in order along the line.
+    val points: List<List<Double>>,
+)
+
 data class TrackCreateRequest(
     @SerializedName("project_id") val projectId: String,
     val name: String,

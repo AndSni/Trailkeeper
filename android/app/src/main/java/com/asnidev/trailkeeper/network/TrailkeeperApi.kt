@@ -66,6 +66,9 @@ interface TrailkeeperApi {
     @POST("tracks")
     suspend fun createTrack(@Body body: TrackCreateRequest): TrackDto
 
+    @POST("trails")
+    suspend fun createTrail(@Body body: TrailCreateRequest): TrailDto
+
     @POST("tasks")
     suspend fun createTask(
         @Query("project_id") projectId: String,

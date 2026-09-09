@@ -23,6 +23,17 @@ export function signOut() {
   localStorage.removeItem(REFRESH_KEY);
 }
 
+/** The signed-in user's id, decoded from the access token (`sub`). */
+export function currentUserId(): string | null {
+  const t = accessToken ?? localStorage.getItem(ACCESS_KEY);
+  if (!t) return null;
+  try {
+    return JSON.parse(atob(t.split(".")[1] ?? "")).sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function login(email: string, password: string): Promise<void> {
   const res = await fetch("/auth/login", {
     method: "POST",
@@ -149,12 +160,28 @@ export interface Track {
   geometry: GeoJson | null;
 }
 
+export interface Member {
+  user_id: string;
+  email: string;
+  name: string;
+}
+
+export interface Message {
+  id: string;
+  task_id: string | null;
+  author_id: string | null;
+  body: string;
+  created_at: string;
+}
+
 export interface Snapshot {
   project: Project;
+  members: Member[];
   trails: Trail[];
   tasks: Task[];
   structures: Structure[];
   tracks: Track[];
+  messages: Message[];
   high_seq: number;
 }
 
@@ -205,6 +232,11 @@ export const createTrail = (body: {
 }) => api<Trail>("/trails", jsonInit("POST", body));
 
 export const deleteTrack = (id: string) => apiVoid(`/tracks/${id}`, { method: "DELETE" });
+
+export const postMessage = (body: { project_id: string; task_id?: string | null; body: string }) =>
+  api<Message>("/messages", jsonInit("POST", body));
+
+export const deleteMessage = (id: string) => apiVoid(`/messages/${id}`, { method: "DELETE" });
 
 export async function importGpx(projectId: string, file: File): Promise<Track[]> {
   const form = new FormData();

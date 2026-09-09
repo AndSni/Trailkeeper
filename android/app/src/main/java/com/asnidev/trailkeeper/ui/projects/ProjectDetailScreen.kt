@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -22,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
@@ -113,6 +116,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
         }
             .collectAsState(initial = emptyList())
     val messages by vm.discussion.collectAsState()
+    val commentCounts by vm.taskCommentCounts.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showAdd by remember { mutableStateOf(false) }
 
@@ -151,10 +155,10 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
     val requestNotifications =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(tab) {
-        if ((tab == 2 || tab == 4 || tab == 5 || tab == 6) && !hasLocation) {
+        if (tab in intArrayOf(1, 2, 4, 5, 6) && !hasLocation) {
             requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
-        if (tab == 6 && android.os.Build.VERSION.SDK_INT >= 33) {
+        if ((tab == 1 || tab == 6) && android.os.Build.VERSION.SDK_INT >= 33) {
             requestNotifications.launch("android.permission.POST_NOTIFICATIONS")
         }
     }
@@ -199,14 +203,14 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                 }
             }
 
-            ScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Tasks (${s.tasks.size})") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Trails (${s.trails.size})") })
+            ScrollableTabRow(selectedTabIndex = tab, edgePadding = 8.dp) {
+                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Tasks") })
                 Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Map") })
-                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Discussion") })
+                Tab(selected = tab == 6, onClick = { tab = 6 }, text = { Text("Route") })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Trails") })
                 Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Work") })
                 Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("Structures") })
-                Tab(selected = tab == 6, onClick = { tab = 6 }, text = { Text("Route") })
+                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Discussion") })
             }
 
             Box(Modifier.fillMaxSize()) {
@@ -252,12 +256,16 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                     tab == 0 ->
                         TaskList(
                             s.tasks,
+                            commentCounts = commentCounts,
                             onSetStatus = vm::setStatus,
                             onOpen = { t -> selected = "task" to t.id; focusOnMap(t.geometryJson) },
                         )
                     tab == 1 ->
                         TrailList(
                             s.trails,
+                            projectId = projectId,
+                            hasLocation = hasLocation,
+                            onSaveWalkedTrail = { name -> vm.saveWalkedTrail(name, s.project?.activity ?: "mtb") },
                             onOpen = { tr -> selected = "trail" to tr.id; focusOnMap(tr.geometryJson) },
                         )
                     tab == 2 ->
@@ -549,6 +557,7 @@ private fun EditTaskDialog(
 @Composable
 private fun TaskList(
     tasks: List<TaskEntity>,
+    commentCounts: Map<String, Int>,
     onSetStatus: (String, String) -> Unit,
     onOpen: (TaskEntity) -> Unit,
 ) {
@@ -564,6 +573,7 @@ private fun TaskList(
         items(tasks, key = { it.id }) { t ->
             val photos = jsonArraySize(t.photosJson)
             val assignees = jsonArraySize(t.assigneeIdsJson)
+            val comments = commentCounts[t.id] ?: 0
             Card(onClick = { onOpen(t) }, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -571,8 +581,22 @@ private fun TaskList(
                         Text(
                             t.title,
                             style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(start = 8.dp),
+                            modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false),
                         )
+                        if (comments > 0) {
+                            Spacer(Modifier.weight(1f))
+                            Icon(
+                                Icons.AutoMirrored.Filled.Comment,
+                                contentDescription = "Comments",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                " $comments",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     Text(
                         buildString {
@@ -605,18 +629,30 @@ private fun TaskList(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun TrailList(trails: List<TrailEntity>, onOpen: (TrailEntity) -> Unit) {
-    if (trails.isEmpty()) {
-        EmptyHint("No trails imported yet.")
-        return
-    }
+private fun TrailList(
+    trails: List<TrailEntity>,
+    projectId: String,
+    hasLocation: Boolean,
+    onSaveWalkedTrail: (String) -> Unit,
+    onOpen: (TrailEntity) -> Unit,
+) {
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        item { WalkTrailCard(projectId, hasLocation, onSaveWalkedTrail) }
+        if (trails.isEmpty()) {
+            item {
+                Text(
+                    "No trails yet — record one by walking it, or draw one in the web console.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         items(trails, key = { it.id }) { tr ->
             Card(onClick = { onOpen(tr) }, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -626,6 +662,81 @@ private fun TrailList(trails: List<TrailEntity>, onOpen: (TrailEntity) -> Unit) 
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WalkTrailCard(projectId: String, hasLocation: Boolean, onSave: (String) -> Unit) {
+    val context = LocalContext.current
+    val rec by com.asnidev.trailkeeper.record.TrackRecorder.state.collectAsState()
+    var name by remember { mutableStateOf("") }
+    val phase = rec.phase
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Record a trail by walking it", style = MaterialTheme.typography.titleSmall)
+            when (phase) {
+                com.asnidev.trailkeeper.record.RecPhase.IDLE ->
+                    Button(
+                        enabled = hasLocation,
+                        onClick = {
+                            com.asnidev.trailkeeper.record.TrackRecordingService.start(context, projectId)
+                        },
+                    ) { Text(if (hasLocation) "＋ Start recording" else "Location permission needed") }
+
+                com.asnidev.trailkeeper.record.RecPhase.RECORDING,
+                com.asnidev.trailkeeper.record.RecPhase.PAUSED -> {
+                    Text(
+                        "%.2f km · %d points%s".format(
+                            rec.distanceM / 1000.0,
+                            rec.points.size,
+                            if (phase == com.asnidev.trailkeeper.record.RecPhase.PAUSED) " · paused" else "",
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (phase == com.asnidev.trailkeeper.record.RecPhase.RECORDING) {
+                            OutlinedButton(onClick = {
+                                com.asnidev.trailkeeper.record.TrackRecordingService.pause(context)
+                            }) { Text("Pause") }
+                        } else {
+                            Button(onClick = {
+                                com.asnidev.trailkeeper.record.TrackRecordingService.resume(context)
+                            }) { Text("Resume") }
+                        }
+                        OutlinedButton(onClick = {
+                            com.asnidev.trailkeeper.record.TrackRecordingService.stop(context)
+                        }) { Text("Stop") }
+                    }
+                }
+
+                com.asnidev.trailkeeper.record.RecPhase.STOPPED -> {
+                    Text(
+                        "%.2f km · %d points".format(rec.distanceM / 1000.0, rec.points.size),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Trail name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            enabled = name.isNotBlank() && rec.points.size >= 2,
+                            onClick = { onSave(name); name = "" },
+                        ) { Text("Save as trail") }
+                        OutlinedButton(onClick = {
+                            com.asnidev.trailkeeper.record.TrackRecorder.reset(); name = ""
+                        }) { Text("Discard") }
+                    }
                 }
             }
         }

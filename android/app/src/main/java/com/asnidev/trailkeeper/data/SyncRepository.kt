@@ -25,6 +25,7 @@ import com.asnidev.trailkeeper.network.StructurePatchRequest
 import com.asnidev.trailkeeper.network.TaskCreateRequest
 import com.asnidev.trailkeeper.network.TrackCreateRequest
 import com.asnidev.trailkeeper.network.TrackDto
+import com.asnidev.trailkeeper.network.TrailCreateRequest
 import com.asnidev.trailkeeper.network.SyncChangeDto
 import com.asnidev.trailkeeper.network.SyncOpRequest
 import com.asnidev.trailkeeper.network.SyncPushRequest
@@ -192,6 +193,20 @@ object SyncRepository {
 
     suspend fun segmentRollup(projectId: String, groupBy: String): RollupDto =
         ApiClient.api().segmentRollup(projectId, groupBy)
+
+    /** Create a trail from a walked path ([lat,lon] pairs). Online (admin+);
+     * the authoritative row folds into Room. */
+    suspend fun createTrail(name: String, activity: String, points: List<Pair<Double, Double>>) {
+        val dto =
+            ApiClient.api().createTrail(
+                TrailCreateRequest(
+                    name = name.trim().ifBlank { "Trail" },
+                    activity = activity,
+                    points = points.map { listOf(it.first, it.second) },
+                )
+            )
+        db.trailDao().upsert(dto.toEntity())
+    }
 
     /** Create a structure online; fold the authoritative row into Room. */
     suspend fun createStructure(req: StructureCreateRequest) {

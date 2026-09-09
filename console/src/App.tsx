@@ -4,6 +4,8 @@ import {
   createStructure,
   createTask,
   createTrail,
+  currentUserId,
+  deleteMessage,
   deleteStructure,
   deleteTask,
   deleteTrail,
@@ -13,10 +15,13 @@ import {
   importGpx,
   isSignedIn,
   listProjects,
+  postMessage,
   signOut,
   updateStructure,
   updateTask,
   updateTrail,
+  type Member,
+  type Message,
   type Project,
   type Snapshot,
 } from "./api";
@@ -24,7 +29,7 @@ import { Login } from "./Login";
 import { MapView, type FocusTarget } from "./MapView";
 import { boundsOf, centerOf } from "./geo";
 
-type Tab = "tasks" | "trails" | "structures" | "tracks";
+type Tab = "tasks" | "trails" | "structures" | "tracks" | "discussion";
 type Mode =
   | { kind: "idle" }
   | { kind: "add-task" }
@@ -272,14 +277,14 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
       <div className="body">
         <div className="panel">
           <div className="tabs">
-            {(["tasks", "trails", "structures", "tracks"] as Tab[]).map((t) => (
+            {(["tasks", "trails", "structures", "tracks", "discussion"] as Tab[]).map((t) => (
               <button
                 key={t}
                 className={tab === t ? "active" : ""}
                 onClick={() => { setTab(t); setSelected(null); }}
               >
-                {t[0].toUpperCase() + t.slice(1)}
-                {snapshot ? ` (${snapshot[t].length})` : ""}
+                {t === "discussion" ? "Chat" : t[0].toUpperCase() + t.slice(1)}
+                {snapshot && t !== "discussion" ? ` (${(snapshot[t] as unknown[]).length})` : ""}
               </button>
             ))}
           </div>
@@ -290,6 +295,19 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
             </div>
           ) : !projectId ? (
             <div className="empty">Pick a project above.</div>
+          ) : tab === "discussion" ? (
+            !snapshot ? (
+              <div className="empty">Loading…</div>
+            ) : (
+              <Chat
+                title="Project discussion"
+                messages={snapshot.messages.filter((m) => m.task_id == null)}
+                members={snapshot.members}
+                busy={busy}
+                onPost={(body) => run(() => postMessage({ project_id: projectId, body }))}
+                onDelete={(id) => run(() => deleteMessage(id))}
+              />
+            )
           ) : selectedRow && tab !== "tracks" ? (
             <Detail
               tab={tab}
@@ -316,6 +334,10 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                   setSelected(null);
                 })
               }
+              onPostComment={(body) =>
+                run(() => postMessage({ project_id: projectId, task_id: selectedRow.id, body }))
+              }
+              onDeleteComment={(id) => run(() => deleteMessage(id))}
             />
           ) : !snapshot ? (
             <div className="empty">Loading…</div>
@@ -491,6 +513,8 @@ function Detail({
   onPatch,
   onMove,
   onDelete,
+  onPostComment,
+  onDeleteComment,
 }: {
   tab: Tab;
   row: { id: string; name: string };
@@ -501,6 +525,8 @@ function Detail({
   onPatch: (body: Record<string, string>) => void;
   onMove: () => void;
   onDelete: () => void;
+  onPostComment: (body: string) => void;
+  onDeleteComment: (id: string) => void;
 }) {
   const task = tab === "tasks" ? snapshot.tasks.find((t) => t.id === row.id) : null;
   const structure = tab === "structures" ? snapshot.structures.find((s) => s.id === row.id) : null;
@@ -600,6 +626,81 @@ function Detail({
           <button className="ghost" disabled={busy} onClick={onMove}>Move</button>
         )}
         <button className="danger" disabled={busy} onClick={onDelete}>Delete</button>
+      </div>
+
+      {task && (
+        <div style={{ marginTop: 16 }}>
+          <Chat
+            title="Comments"
+            messages={snapshot.messages.filter((m) => m.task_id === task.id)}
+            members={snapshot.members}
+            busy={busy}
+            onPost={onPostComment}
+            onDelete={onDeleteComment}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Chat({
+  title,
+  messages,
+  members,
+  busy,
+  onPost,
+  onDelete,
+}: {
+  title: string;
+  messages: Message[];
+  members: Member[];
+  busy: boolean;
+  onPost: (body: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const myId = currentUserId();
+  const names = new Map(members.map((m) => [m.user_id, m.name]));
+  const sorted = [...messages].sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  function send() {
+    const b = draft.trim();
+    if (!b) return;
+    onPost(b);
+    setDraft("");
+  }
+
+  return (
+    <div className="chat">
+      <h3>{title}</h3>
+      <div className="chat-list">
+        {sorted.length === 0 && <div className="muted">No messages yet.</div>}
+        {sorted.map((m) => (
+          <div key={m.id} className="chat-msg">
+            <div className="chat-meta">
+              {names.get(m.author_id ?? "") ?? "Someone"} ·{" "}
+              {new Date(m.created_at).toLocaleString()}
+              {m.author_id === myId && (
+                <button className="ghost chat-del" disabled={busy} onClick={() => onDelete(m.id)}>
+                  delete
+                </button>
+              )}
+            </div>
+            <div className="chat-body">{m.body}</div>
+          </div>
+        ))}
+      </div>
+      <div className="chat-input">
+        <input
+          value={draft}
+          placeholder="Write a message…"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") send();
+          }}
+        />
+        <button disabled={busy || !draft.trim()} onClick={send}>Send</button>
       </div>
     </div>
   );

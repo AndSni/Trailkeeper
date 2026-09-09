@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.asnidev.trailkeeper.data.Session
 import com.asnidev.trailkeeper.data.SyncRepository
+import com.asnidev.trailkeeper.record.TrackRecorder
 import com.asnidev.trailkeeper.data.local.ProjectEntity
 import com.asnidev.trailkeeper.data.local.TaskEntity
 import com.asnidev.trailkeeper.data.local.TrailEntity
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -70,6 +72,13 @@ class ProjectDetailViewModel(private val projectId: String) : ViewModel() {
             db.projectMemberDao().observeForProject(projectId),
         ) { messages, members -> toRows(messages, members) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** taskId -> number of comments on that task's thread. */
+    val taskCommentCounts: StateFlow<Map<String, Int>> =
+        db.messageDao()
+            .observeTaskCommentCounts(projectId)
+            .map { list -> list.associate { it.taskId to it.count } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** One task's own comment thread. */
     fun taskThread(taskId: String): Flow<List<MessageRow>> =
@@ -166,6 +175,20 @@ class ProjectDetailViewModel(private val projectId: String) : ViewModel() {
         viewModelScope.launch {
             runCatching { SyncRepository.deleteMessage(id) }
                 .onFailure { e -> sync.update { it.copy(error = e.message ?: "Couldn't delete") } }
+        }
+    }
+
+    /** Save the current [TrackRecorder] path as a Trail (walk-to-map). */
+    fun saveWalkedTrail(name: String, activity: String) {
+        val pts = TrackRecorder.state.value.points.map { it.lat to it.lon }
+        if (pts.size < 2) {
+            sync.update { it.copy(error = "Not enough GPS points yet") }
+            return
+        }
+        viewModelScope.launch {
+            runCatching { SyncRepository.createTrail(name, activity, pts) }
+                .onSuccess { TrackRecorder.reset() }
+                .onFailure { e -> sync.update { it.copy(error = e.message ?: "Couldn't save the trail") } }
         }
     }
 }
