@@ -72,7 +72,12 @@ export function MapView({
         source: "tk-structures",
         paint: {
           "circle-radius": 6,
-          "circle-color": "#2f6d7a",
+          "circle-color": [
+            "case",
+            ["all", ["has", "color"], ["!=", ["get", "color"], ""]],
+            ["get", "color"],
+            "#2f6d7a",
+          ],
           "circle-stroke-width": 2,
           "circle-stroke-color": "#fff",
         },

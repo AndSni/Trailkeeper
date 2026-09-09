@@ -45,6 +45,7 @@ const STRUCTURE_TYPES = [
   "drain", "waterbar", "sign", "gate", "bench", "kiosk", "other",
 ];
 const STRUCTURE_STATUSES = ["good", "monitor", "needs_repair", "failed", "decommissioned"];
+const STRUCTURE_COLORS = ["", "#2f6d7a", "#4c6b3c", "#b7791f", "#b23b3b", "#8a6a4a", "#5c6450"];
 
 export function App() {
   const [authed, setAuthed] = useState(isSignedIn());
@@ -508,10 +509,25 @@ function Detail({
   const statuses =
     tab === "tasks" ? TASK_STATUSES : tab === "structures" ? STRUCTURE_STATUSES : TRAIL_STATUSES;
 
+  const currentName = task?.title ?? structure?.name ?? trail?.name ?? row.name;
+  const nameKey = task ? "title" : "name";
+  const [name, setName] = useState(currentName);
+  useEffect(() => setName(currentName), [currentName]);
+
   return (
     <div className="detail">
       <button className="ghost" onClick={onBack}>← Back</button>
-      <h3>{row.name}</h3>
+
+      <label>Name</label>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input value={name} disabled={busy} onChange={(e) => setName(e.target.value)} />
+        <button
+          disabled={busy || !name.trim() || name === currentName}
+          onClick={() => onPatch({ [nameKey]: name.trim() })}
+        >
+          Rename
+        </button>
+      </div>
 
       <label>Status</label>
       <select value={status} disabled={busy} onChange={(e) => onPatch({ status: e.target.value })}>
@@ -542,6 +558,39 @@ function Detail({
               <option key={t} value={t}>{t.replace(/_/g, " ")}</option>
             ))}
           </select>
+          <label>Marker colour</label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {STRUCTURE_COLORS.map((hex) =>
+              hex === "" ? (
+                <button
+                  key="default"
+                  className={structure.color ? "ghost" : ""}
+                  disabled={busy}
+                  onClick={() => onPatch({ color: "" })}
+                >
+                  default
+                </button>
+              ) : (
+                <button
+                  key={hex}
+                  disabled={busy}
+                  title={hex}
+                  onClick={() => onPatch({ color: hex })}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    padding: 0,
+                    borderRadius: "50%",
+                    background: hex,
+                    border:
+                      structure.color === hex
+                        ? "3px solid var(--ink)"
+                        : "1px solid var(--line)",
+                  }}
+                />
+              ),
+            )}
+          </div>
         </>
       )}
 

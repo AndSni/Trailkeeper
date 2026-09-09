@@ -41,7 +41,7 @@ export function structureFC(snap: Snapshot) {
       .map((s) => ({
         type: "Feature" as const,
         geometry: s.geometry as GeoJson,
-        properties: { id: s.id, kind: "structure", status: s.status },
+        properties: { id: s.id, kind: "structure", status: s.status, color: s.color || "" },
       })),
   );
 }

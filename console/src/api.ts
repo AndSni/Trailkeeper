@@ -134,6 +134,7 @@ export interface Structure {
   name: string;
   structure_type: string;
   status: string;
+  color: string;
   geometry: GeoJson | null;
 }
 
