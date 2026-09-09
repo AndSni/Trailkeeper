@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  createStructure,
+  createTask,
+  deleteStructure,
+  deleteTask,
+  deleteTrail,
   getSnapshot,
   isSignedIn,
   listProjects,
   signOut,
+  updateStructure,
+  updateTask,
+  updateTrail,
   type Project,
   type Snapshot,
 } from "./api";
@@ -11,7 +19,23 @@ import { Login } from "./Login";
 import { MapView, type FocusTarget } from "./MapView";
 import { boundsOf, centerOf } from "./geo";
 
-type Tab = "trails" | "tasks" | "structures";
+type Tab = "tasks" | "trails" | "structures";
+type Mode =
+  | { kind: "idle" }
+  | { kind: "add-task" }
+  | { kind: "add-structure" }
+  | { kind: "move"; tab: Tab; id: string }
+  | { kind: "form-task"; lon: number; lat: number }
+  | { kind: "form-structure"; lon: number; lat: number };
+
+const PRIORITIES = ["low", "medium", "high", "urgent"];
+const TASK_STATUSES = ["open", "in_progress", "done", "wontfix"];
+const TRAIL_STATUSES = ["open", "closed", "needs_work"];
+const STRUCTURE_TYPES = [
+  "culvert", "bridge", "boardwalk", "ford", "steps", "retaining_wall",
+  "drain", "waterbar", "sign", "gate", "bench", "kiosk", "other",
+];
+const STRUCTURE_STATUSES = ["good", "monitor", "needs_repair", "failed", "decommissioned"];
 
 export function App() {
   const [authed, setAuthed] = useState(isSignedIn());
@@ -24,8 +48,11 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [tab, setTab] = useState<Tab>("tasks");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>({ kind: "idle" });
   const [focus, setFocus] = useState<FocusTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     listProjects()
@@ -36,13 +63,17 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
       .catch((e) => setError(String(e)));
   }, []);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     if (!projectId) return;
-    setSnapshot(null);
-    getSnapshot(projectId)
-      .then(setSnapshot)
-      .catch((e) => setError(String(e)));
+    return getSnapshot(projectId).then(setSnapshot).catch((e) => setError(String(e)));
   }, [projectId]);
+
+  useEffect(() => {
+    setSnapshot(null);
+    setSelected(null);
+    setMode({ kind: "idle" });
+    reload();
+  }, [reload]);
 
   const rows = useMemo(() => {
     if (!snapshot) return [];
@@ -68,43 +99,76 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
     }));
   }, [snapshot, tab]);
 
-  function focusRow(geometry: (typeof rows)[number]["geometry"]) {
+  const selectedRow = rows.find((r) => r.id === selected) ?? null;
+
+  function focusGeom(geometry: (typeof rows)[number]["geometry"]) {
     if (!geometry) return;
-    const b = boundsOf([geometry]);
     const isPoint = geometry.type === "Point";
     setFocus({
       nonce: Date.now(),
-      ...(isPoint ? { center: centerOf(geometry) ?? undefined } : { bounds: b ?? undefined }),
+      ...(isPoint
+        ? { center: centerOf(geometry) ?? undefined }
+        : { bounds: boundsOf([geometry]) ?? undefined }),
     });
   }
+
+  async function run(fn: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onPick([lon, lat]: [number, number]) {
+    if (mode.kind === "add-task") setMode({ kind: "form-task", lon, lat });
+    else if (mode.kind === "add-structure") setMode({ kind: "form-structure", lon, lat });
+    else if (mode.kind === "move") {
+      const { tab: mt, id } = mode;
+      setMode({ kind: "idle" });
+      run(() =>
+        mt === "tasks"
+          ? updateTask(id, { lat, lon })
+          : mt === "structures"
+            ? updateStructure(id, { lat, lon })
+            : Promise.resolve(),
+      );
+    }
+  }
+
+  const picking = mode.kind === "add-task" || mode.kind === "add-structure" || mode.kind === "move";
 
   return (
     <div className="app">
       <div className="topbar">
         <span className="brand">Trailkeeper</span>
-        <select
-          value={projectId ?? ""}
-          onChange={(e) => setProjectId(e.target.value)}
-        >
+        <select value={projectId ?? ""} onChange={(e) => setProjectId(e.target.value)}>
           {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
+            <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
+        <button className="ghost" disabled={busy} onClick={() => setMode({ kind: "add-task" })}>
+          ＋ Task
+        </button>
+        <button className="ghost" disabled={busy} onClick={() => setMode({ kind: "add-structure" })}>
+          ＋ Structure
+        </button>
         <span className="spacer" />
         <a href="/app">Dashboard</a>
-        <button
-          className="ghost"
-          onClick={() => {
-            signOut();
-            onSignOut();
-          }}
-        >
-          Sign out
-        </button>
+        <button className="ghost" onClick={() => { signOut(); onSignOut(); }}>Sign out</button>
       </div>
 
+      {picking && (
+        <div className="banner">
+          {mode.kind === "move" ? "Click the map to set the new location" : "Click the map to place it"}
+          <button className="ghost" onClick={() => setMode({ kind: "idle" })}>Cancel</button>
+        </div>
+      )}
       {error && <div className="err" style={{ margin: 8 }}>{error}</div>}
 
       <div className="body">
@@ -114,28 +178,243 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
               <button
                 key={t}
                 className={tab === t ? "active" : ""}
-                onClick={() => setTab(t)}
+                onClick={() => { setTab(t); setSelected(null); }}
               >
                 {t[0].toUpperCase() + t.slice(1)}
                 {snapshot ? ` (${snapshot[t].length})` : ""}
               </button>
             ))}
           </div>
-          <div className="list">
-            {!snapshot && <div className="empty">Loading…</div>}
-            {snapshot && rows.length === 0 && <div className="empty">Nothing here yet.</div>}
-            {rows.map((r) => (
-              <div key={r.id} className="row" onClick={() => focusRow(r.geometry)}>
-                <div className="name">{r.name}</div>
-                <div className="meta">
-                  {r.meta}
-                  {!r.geometry && <span className="pill" style={{ marginLeft: 6 }}>no location</span>}
+
+          {selectedRow ? (
+            <Detail
+              tab={tab}
+              row={selectedRow}
+              snapshot={snapshot!}
+              busy={busy}
+              onBack={() => setSelected(null)}
+              onFocus={() => focusGeom(selectedRow.geometry)}
+              onPatch={(body) =>
+                run(() =>
+                  tab === "tasks"
+                    ? updateTask(selectedRow.id, body)
+                    : tab === "structures"
+                      ? updateStructure(selectedRow.id, body)
+                      : updateTrail(selectedRow.id, body),
+                )
+              }
+              onMove={() => setMode({ kind: "move", tab, id: selectedRow.id })}
+              onDelete={() =>
+                run(async () => {
+                  if (tab === "tasks") await deleteTask(selectedRow.id);
+                  else if (tab === "structures") await deleteStructure(selectedRow.id);
+                  else await deleteTrail(selectedRow.id);
+                  setSelected(null);
+                })
+              }
+            />
+          ) : (
+            <div className="list">
+              {!snapshot && <div className="empty">Loading…</div>}
+              {snapshot && rows.length === 0 && <div className="empty">Nothing here yet.</div>}
+              {rows.map((r) => (
+                <div
+                  key={r.id}
+                  className="row"
+                  onClick={() => { setSelected(r.id); focusGeom(r.geometry); }}
+                >
+                  <div className="name">{r.name}</div>
+                  <div className="meta">
+                    {r.meta}
+                    {!r.geometry && <span className="pill" style={{ marginLeft: 6 }}>no location</span>}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
-        <MapView snapshot={snapshot} focus={focus} />
+
+        <MapView snapshot={snapshot} focus={focus} picking={picking} onPick={onPick} />
+      </div>
+
+      {mode.kind === "form-task" && (
+        <CreateTaskForm
+          busy={busy}
+          onCancel={() => setMode({ kind: "idle" })}
+          onCreate={(title, priority) =>
+            run(async () => {
+              await createTask(projectId!, { title, priority, lat: mode.lat, lon: mode.lon });
+              setMode({ kind: "idle" });
+              setTab("tasks");
+            })
+          }
+        />
+      )}
+      {mode.kind === "form-structure" && (
+        <CreateStructureForm
+          busy={busy}
+          onCancel={() => setMode({ kind: "idle" })}
+          onCreate={(name, structure_type) =>
+            run(async () => {
+              await createStructure({ name, structure_type, lat: mode.lat, lon: mode.lon });
+              setMode({ kind: "idle" });
+              setTab("structures");
+            })
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function Detail({
+  tab,
+  row,
+  snapshot,
+  busy,
+  onBack,
+  onFocus,
+  onPatch,
+  onMove,
+  onDelete,
+}: {
+  tab: Tab;
+  row: { id: string; name: string };
+  snapshot: Snapshot;
+  busy: boolean;
+  onBack: () => void;
+  onFocus: () => void;
+  onPatch: (body: Record<string, string>) => void;
+  onMove: () => void;
+  onDelete: () => void;
+}) {
+  const task = tab === "tasks" ? snapshot.tasks.find((t) => t.id === row.id) : null;
+  const structure = tab === "structures" ? snapshot.structures.find((s) => s.id === row.id) : null;
+  const trail = tab === "trails" ? snapshot.trails.find((t) => t.id === row.id) : null;
+  const status = task?.status ?? structure?.status ?? trail?.status ?? "";
+  const statuses =
+    tab === "tasks" ? TASK_STATUSES : tab === "structures" ? STRUCTURE_STATUSES : TRAIL_STATUSES;
+
+  return (
+    <div className="detail">
+      <button className="ghost" onClick={onBack}>← Back</button>
+      <h3>{row.name}</h3>
+
+      <label>Status</label>
+      <select value={status} disabled={busy} onChange={(e) => onPatch({ status: e.target.value })}>
+        {statuses.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
+      </select>
+
+      {task && (
+        <>
+          <label>Priority</label>
+          <select
+            value={task.priority}
+            disabled={busy}
+            onChange={(e) => onPatch({ priority: e.target.value })}
+          >
+            {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </>
+      )}
+      {structure && (
+        <>
+          <label>Type</label>
+          <select
+            value={structure.structure_type}
+            disabled={busy}
+            onChange={(e) => onPatch({ structure_type: e.target.value })}
+          >
+            {STRUCTURE_TYPES.map((t) => (
+              <option key={t} value={t}>{t.replace(/_/g, " ")}</option>
+            ))}
+          </select>
+        </>
+      )}
+
+      <div className="detail-actions">
+        <button className="ghost" onClick={onFocus}>Zoom to</button>
+        {tab !== "trails" && (
+          <button className="ghost" disabled={busy} onClick={onMove}>Move</button>
+        )}
+        <button className="danger" disabled={busy} onClick={onDelete}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
+function CreateTaskForm({
+  busy,
+  onCancel,
+  onCreate,
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onCreate: (title: string, priority: string) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [priority, setPriority] = useState("medium");
+  return (
+    <Modal title="New task" onCancel={onCancel}>
+      <label>Title</label>
+      <input value={title} autoFocus onChange={(e) => setTitle(e.target.value)} />
+      <label>Priority</label>
+      <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+        {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+      </select>
+      <div className="detail-actions">
+        <button disabled={busy || !title.trim()} onClick={() => onCreate(title.trim(), priority)}>
+          Create
+        </button>
+        <button className="ghost" onClick={onCancel}>Cancel</button>
+      </div>
+    </Modal>
+  );
+}
+
+function CreateStructureForm({
+  busy,
+  onCancel,
+  onCreate,
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onCreate: (name: string, type: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [type, setType] = useState("culvert");
+  return (
+    <Modal title="New structure" onCancel={onCancel}>
+      <label>Name</label>
+      <input value={name} autoFocus onChange={(e) => setName(e.target.value)} />
+      <label>Type</label>
+      <select value={type} onChange={(e) => setType(e.target.value)}>
+        {STRUCTURE_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
+      </select>
+      <div className="detail-actions">
+        <button disabled={busy || !name.trim()} onClick={() => onCreate(name.trim(), type)}>
+          Create
+        </button>
+        <button className="ghost" onClick={onCancel}>Cancel</button>
+      </div>
+    </Modal>
+  );
+}
+
+function Modal({
+  title,
+  onCancel,
+  children,
+}: {
+  title: string;
+  onCancel: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="modal-scrim" onClick={onCancel}>
+      <div className="modal card" onClick={(e) => e.stopPropagation()}>
+        <h2>{title}</h2>
+        {children}
       </div>
     </div>
   );

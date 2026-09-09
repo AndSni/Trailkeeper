@@ -15,14 +15,20 @@ export interface FocusTarget {
 export function MapView({
   snapshot,
   focus,
+  picking = false,
+  onPick,
 }: {
   snapshot: Snapshot | null;
   focus: FocusTarget | null;
+  picking?: boolean;
+  onPick?: (lngLat: [number, number]) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const readyRef = useRef(false);
   const fittedRef = useRef<string | null>(null);
+  const onPickRef = useRef(onPick);
+  onPickRef.current = onPick;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -33,6 +39,7 @@ export function MapView({
       zoom: 6,
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.on("click", (e) => onPickRef.current?.([e.lngLat.lng, e.lngLat.lat]));
     mapRef.current = map;
 
     map.on("load", () => {
@@ -111,6 +118,11 @@ export function MapView({
     if (focus.bounds) map.fitBounds(focus.bounds, { padding: 80, maxZoom: 16, duration: 600 });
     else if (focus.center) map.flyTo({ center: focus.center, zoom: 16, duration: 600 });
   }, [focus]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map) map.getCanvas().style.cursor = picking ? "crosshair" : "";
+  }, [picking]);
 
   return <div className="map" ref={containerRef} />;
 }

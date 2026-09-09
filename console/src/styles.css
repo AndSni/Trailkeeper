@@ -62,3 +62,24 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px
 .map { flex: 1; min-width: 0; }
 .maplibregl-map { height: 100%; }
 .empty { padding: 24px; color: var(--muted); }
+
+.topbar button { padding: 6px 10px; }
+.banner {
+  display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+  background: var(--accent); color: var(--accent-ink); font-weight: 600;
+}
+.banner button { background: rgba(255, 255, 255, 0.15); color: inherit; border: 0; }
+button.danger { background: var(--danger); color: #fff; }
+
+.detail { padding: 16px; overflow-y: auto; }
+.detail h3 { margin: 8px 0 4px; }
+.detail select { width: 100%; font: inherit; padding: 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+
+.modal-scrim {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal { width: 340px; max-width: 100%; }
+.modal h2 { margin-top: 0; }
+.modal select { width: 100%; font: inherit; padding: 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }

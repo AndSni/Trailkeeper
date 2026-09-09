@@ -269,11 +269,16 @@ checkout has no `/console/` until you build it.
   "liberty") with trail lines, task points and structure points, camera
   auto-fit
 - Side panel: Tasks / Trails / Structures lists; click a row to fly the map
-  to it. Read-only for now - CRUD from the browser is the next slice
+  to it and open a detail panel
+- **Editing from the map**: "＋ Task" / "＋ Structure" then click the map to
+  place it (a small form asks for title+priority / name+type). A selected
+  item's detail panel changes status / priority / type, "Move" re-points it
+  with a map click, "Delete" removes it. Trails: status + delete only
+  (geometry editing is a later slice). Every mutation re-pulls the snapshot
 - Dev: `cd console && npm install && npm run dev` (proxies the API to
   `127.0.0.1:9110`)
 
-- Not yet: browser CRUD, cached dashboard aggregates, PDF export
+- Not yet: trail geometry drawing, cached dashboard aggregates, PDF export
   (`WeasyPrint` - needs cairo/pango on the host). See `docs/BLUEPRINT.md`
   sec 11
 

@@ -51,7 +51,7 @@ async function refresh(): Promise<boolean> {
   return true;
 }
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request(path: string, init: RequestInit): Promise<Response> {
   const send = () =>
     fetch(path, {
       ...init,
@@ -68,9 +68,31 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     location.reload();
     throw new Error("Session expired");
   }
-  if (!res.ok) throw new Error(`${init.method ?? "GET"} ${path} -> ${res.status}`);
-  return (await res.json()) as T;
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.json())?.detail ?? "";
+    } catch {
+      /* no body */
+    }
+    throw new Error(detail || `${init.method ?? "GET"} ${path} -> ${res.status}`);
+  }
+  return res;
 }
+
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return (await (await request(path, init)).json()) as T;
+}
+
+async function apiVoid(path: string, init: RequestInit = {}): Promise<void> {
+  await request(path, init);
+}
+
+const jsonInit = (method: string, body: unknown): RequestInit => ({
+  method,
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
 
 // --- typed endpoints -------------------------------------------------------
 
@@ -121,3 +143,35 @@ export interface Snapshot {
 export const listProjects = () => api<Project[]>("/projects");
 export const getSnapshot = (projectId: string) =>
   api<Snapshot>(`/sync/snapshot?project=${encodeURIComponent(projectId)}`);
+
+// --- mutations -----------------------------------------------------------
+
+export interface LatLon {
+  lat: number;
+  lon: number;
+}
+
+export const createTask = (
+  projectId: string,
+  body: { title: string; priority: string } & Partial<LatLon>,
+) => api<Task>(`/tasks?project_id=${encodeURIComponent(projectId)}`, jsonInit("POST", body));
+
+export const updateTask = (id: string, body: Record<string, unknown>) =>
+  api<Task>(`/tasks/${id}`, jsonInit("PATCH", body));
+
+export const deleteTask = (id: string) => apiVoid(`/tasks/${id}`, { method: "DELETE" });
+
+export const createStructure = (
+  body: { name: string; structure_type: string } & Partial<LatLon>,
+) => api<Structure>("/structures", jsonInit("POST", body));
+
+export const updateStructure = (id: string, body: Record<string, unknown>) =>
+  api<Structure>(`/structures/${id}`, jsonInit("PATCH", body));
+
+export const deleteStructure = (id: string) =>
+  apiVoid(`/structures/${id}`, { method: "DELETE" });
+
+export const updateTrail = (id: string, body: Record<string, unknown>) =>
+  api<Trail>(`/trails/${id}`, jsonInit("PATCH", body));
+
+export const deleteTrail = (id: string) => apiVoid(`/trails/${id}`, { method: "DELETE" });
