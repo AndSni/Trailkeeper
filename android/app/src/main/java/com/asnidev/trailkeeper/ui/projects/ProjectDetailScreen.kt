@@ -96,6 +96,13 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
         )
     val s by vm.state.collectAsState()
     val structures by structuresVm.structures.collectAsState()
+    val tracks by
+        remember(projectId) {
+            com.asnidev.trailkeeper.data.local.TrailkeeperDb.db
+                .trackDao()
+                .observeForProject(projectId)
+        }
+            .collectAsState(initial = emptyList())
     val messages by vm.discussion.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showAdd by remember { mutableStateOf(false) }
@@ -182,6 +189,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                             trails = s.trails,
                             tasks = s.tasks,
                             structures = structures,
+                            tracks = tracks,
                             hasLocationPermission = hasLocation,
                             modifier = Modifier.fillMaxSize(),
                         )

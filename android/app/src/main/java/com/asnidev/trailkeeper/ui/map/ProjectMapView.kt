@@ -12,6 +12,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.asnidev.trailkeeper.data.local.StructureEntity
 import com.asnidev.trailkeeper.data.local.TaskEntity
+import com.asnidev.trailkeeper.data.local.TrackEntity
 import com.asnidev.trailkeeper.data.local.TrailEntity
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -30,6 +31,7 @@ import org.maplibre.android.style.sources.GeoJsonSource
 
 private const val STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
 private const val TRAIL_SRC = "tk-trails"
+private const val TRACK_SRC = "tk-tracks"
 private const val TASK_SRC = "tk-tasks"
 private const val STRUCTURE_SRC = "tk-structures"
 private val LATVIA = LatLng(56.95, 24.6)
@@ -47,6 +49,7 @@ fun ProjectMap(
     trails: List<TrailEntity>,
     tasks: List<TaskEntity>,
     structures: List<StructureEntity>,
+    tracks: List<TrackEntity>,
     hasLocationPermission: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -63,12 +66,22 @@ fun ProjectMap(
                 map.setStyle(Style.Builder().fromUri(STYLE_URL)) { style ->
                     holder.style = style
                     style.addSource(GeoJsonSource(TRAIL_SRC))
+                    style.addSource(GeoJsonSource(TRACK_SRC))
                     style.addSource(GeoJsonSource(TASK_SRC))
                     style.addSource(GeoJsonSource(STRUCTURE_SRC))
                     style.addLayer(
                         LineLayer("$TRAIL_SRC-line", TRAIL_SRC).withProperties(
                             PropertyFactory.lineColor("#3C5A31"),
                             PropertyFactory.lineWidth(3f),
+                            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                        )
+                    )
+                    style.addLayer(
+                        LineLayer("$TRACK_SRC-line", TRACK_SRC).withProperties(
+                            PropertyFactory.lineColor("#6D4C9C"),
+                            PropertyFactory.lineWidth(3f),
+                            PropertyFactory.lineDasharray(arrayOf(1.5f, 1f)),
                             PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
                             PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                         )
@@ -90,7 +103,7 @@ fun ProjectMap(
                         )
                     )
                     enableLocation(context, map, style, hasLocationPermission)
-                    pushData(holder, trails, tasks, structures)
+                    pushData(holder, trails, tasks, structures, tracks)
                 }
             }
         }
@@ -118,7 +131,7 @@ fun ProjectMap(
     AndroidView(
         factory = { mapView },
         modifier = modifier,
-        update = { pushData(holder, trails, tasks, structures) },
+        update = { pushData(holder, trails, tasks, structures, tracks) },
     )
 }
 
@@ -127,15 +140,17 @@ private fun pushData(
     trails: List<TrailEntity>,
     tasks: List<TaskEntity>,
     structures: List<StructureEntity>,
+    tracks: List<TrackEntity>,
 ) {
     val style = holder.style ?: return
     (style.getSource(TRAIL_SRC) as? GeoJsonSource)?.setGeoJson(MapGeo.trailFeatures(trails))
+    (style.getSource(TRACK_SRC) as? GeoJsonSource)?.setGeoJson(MapGeo.trackFeatures(tracks))
     (style.getSource(TASK_SRC) as? GeoJsonSource)?.setGeoJson(MapGeo.taskFeatures(tasks))
     (style.getSource(STRUCTURE_SRC) as? GeoJsonSource)
         ?.setGeoJson(MapGeo.structureFeatures(structures))
 
     if (!holder.fittedCamera) {
-        val bounds = MapGeo.bounds(trails, tasks, structures)
+        val bounds = MapGeo.bounds(trails, tasks, structures, tracks)
         if (bounds != null) {
             holder.map?.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds, 72), 500)
             holder.fittedCamera = true

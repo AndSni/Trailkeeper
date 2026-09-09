@@ -171,8 +171,9 @@ Android Room outbox). This slice is the backend the field app pulls from.
 - **Stop** -> name the route -> `POST /tracks` with the full point list; the
   row lands in Room and the raw points stay server-side
 - Recorded routes ride the sync stream (Room v6); the tab lists them with
-  distance / point count / date. GPX *export from the app* and drawing a
-  recorded route on the map are later slices
+  distance / point count / date, and they render as a purple dashed line on
+  the **Map** tab alongside trails / tasks / structures. GPX *export from
+  the app* is a later slice
 
 ## Phase 7 (hardening) so far
 
