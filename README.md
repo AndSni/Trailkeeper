@@ -157,6 +157,18 @@ Android Room outbox). This slice is the backend the field app pulls from.
 - Synced (snapshot + changes) as metadata + geometry only; the raw `points`
   are fetched on demand, never in the sync stream
 
+## Android - task & structure detail / edit (post-beta feedback)
+
+- Tapping a **task or trail row** opens a detail bottom-sheet and jumps the
+  Map tab to it; tapping a **map marker** opens the same sheet
+- **Task** sheet: Edit (title / description / priority), Mark done / Reopen,
+  Move / Set location (a tap-to-place map picker) - all through the offline
+  outbox
+- **Structure** sheet: change status (chips), Move / Set location, Delete
+  (with a confirm)
+- **Add structure** is now a full-screen form with a "Place on map" picker
+  (or "Use my location"), instead of the old current-location-only dialog
+
 ## What Phase 3 covers (Android) - route recording
 
 - **Route tab** on the project screen. "Start recording" launches

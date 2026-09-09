@@ -16,7 +16,7 @@ object MapGeo {
         featureCollection(
             trails.mapNotNull { t ->
                 t.geometryJson?.let { g ->
-                    feature(g, """"kind":"trail","status":${quote(t.status)}""")
+                    feature(g, """"id":${quote(t.id)},"kind":"trail","status":${quote(t.status)}""")
                 }
             }
         )
@@ -25,7 +25,10 @@ object MapGeo {
         featureCollection(
             tasks.mapNotNull { t ->
                 t.geometryJson?.let { g ->
-                    feature(g, """"kind":"task","priority":${quote(t.priority)},"status":${quote(t.status)}""")
+                    feature(
+                        g,
+                        """"id":${quote(t.id)},"kind":"task","priority":${quote(t.priority)},"status":${quote(t.status)}""",
+                    )
                 }
             }
         )
@@ -36,7 +39,7 @@ object MapGeo {
                 s.geometryJson?.let { g ->
                     feature(
                         g,
-                        """"kind":"structure","type":${quote(s.structureType)},"status":${quote(s.status)}""",
+                        """"id":${quote(s.id)},"kind":"structure","type":${quote(s.structureType)},"status":${quote(s.status)}""",
                     )
                 }
             }
@@ -46,7 +49,7 @@ object MapGeo {
         featureCollection(
             tracks.mapNotNull { t ->
                 t.geometryJson?.let { g ->
-                    feature(g, """"kind":"track","source":${quote(t.source)}""")
+                    feature(g, """"id":${quote(t.id)},"kind":"track","source":${quote(t.source)}""")
                 }
             }
         )

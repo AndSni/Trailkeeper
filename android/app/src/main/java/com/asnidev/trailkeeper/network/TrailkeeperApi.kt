@@ -1,8 +1,11 @@
 package com.asnidev.trailkeeper.network
 
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface TrailkeeperApi {
@@ -47,6 +50,15 @@ interface TrailkeeperApi {
 
     @POST("structures")
     suspend fun createStructure(@Body body: StructureCreateRequest): StructureDto
+
+    @PATCH("structures/{id}")
+    suspend fun updateStructure(
+        @Path("id") id: String,
+        @Body body: StructurePatchRequest,
+    ): StructureDto
+
+    @DELETE("structures/{id}")
+    suspend fun deleteStructure(@Path("id") id: String): retrofit2.Response<Unit>
 
     @POST("inspections")
     suspend fun createInspection(@Body body: InspectionCreateRequest): InspectionDto

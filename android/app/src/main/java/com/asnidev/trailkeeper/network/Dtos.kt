@@ -258,6 +258,16 @@ data class StructureCreateRequest(
     val notes: String = "",
 )
 
+data class StructurePatchRequest(
+    val name: String? = null,
+    @SerializedName("structure_type") val structureType: String? = null,
+    val status: String? = null,
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val material: String? = null,
+    val notes: String? = null,
+)
+
 data class InspectionCreateRequest(
     @SerializedName("project_id") val projectId: String,
     @SerializedName("structure_id") val structureId: String,

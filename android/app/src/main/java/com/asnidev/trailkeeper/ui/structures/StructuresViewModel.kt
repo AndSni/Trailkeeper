@@ -11,6 +11,7 @@ import com.asnidev.trailkeeper.data.local.TrailkeeperDb
 import com.asnidev.trailkeeper.network.InspectionCreateRequest
 import com.asnidev.trailkeeper.network.InspectionFieldDto
 import com.asnidev.trailkeeper.network.StructureCreateRequest
+import com.asnidev.trailkeeper.network.StructurePatchRequest
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,6 +91,29 @@ class StructuresViewModel(private val projectId: String) : ViewModel() {
             }
                 .onFailure { e -> _message.value = e.message ?: "Couldn't create the structure" }
             _saving.value = false
+        }
+    }
+
+    fun setStructureStatus(id: String, status: String) {
+        viewModelScope.launch {
+            runCatching { SyncRepository.updateStructure(id, StructurePatchRequest(status = status)) }
+                .onFailure { e -> _message.value = e.message ?: "Couldn't update the structure" }
+        }
+    }
+
+    fun moveStructure(id: String, lat: Double, lon: Double) {
+        viewModelScope.launch {
+            runCatching {
+                SyncRepository.updateStructure(id, StructurePatchRequest(lat = lat, lon = lon))
+            }
+                .onFailure { e -> _message.value = e.message ?: "Couldn't move the structure" }
+        }
+    }
+
+    fun deleteStructure(id: String) {
+        viewModelScope.launch {
+            runCatching { SyncRepository.deleteStructure(id) }
+                .onFailure { e -> _message.value = e.message ?: "Couldn't delete the structure" }
         }
     }
 

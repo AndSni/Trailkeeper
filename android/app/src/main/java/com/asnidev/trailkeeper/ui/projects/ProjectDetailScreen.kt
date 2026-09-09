@@ -33,8 +33,11 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -60,6 +63,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.asnidev.trailkeeper.ui.common.PointPickerScreen
+import com.asnidev.trailkeeper.ui.map.MapFocus
 import com.asnidev.trailkeeper.ui.map.ProjectMap
 import com.asnidev.trailkeeper.ui.segments.SegmentWorkTab
 import com.asnidev.trailkeeper.ui.segments.SegmentWorkViewModel
@@ -69,8 +74,10 @@ import com.asnidev.trailkeeper.ui.structures.StructuresViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.asnidev.trailkeeper.data.local.StructureEntity
 import com.asnidev.trailkeeper.data.local.TaskEntity
 import com.asnidev.trailkeeper.data.local.TrailEntity
+import com.asnidev.trailkeeper.data.local.TrackEntity
 import com.google.gson.JsonParser
 import kotlin.math.roundToInt
 
@@ -106,6 +113,26 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
     val messages by vm.discussion.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showAdd by remember { mutableStateOf(false) }
+
+    // Selected entity for the detail bottom-sheet: Pair(kind, id).
+    var selected by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var mapFocus by remember { mutableStateOf<MapFocus?>(null) }
+    var editingTask by remember { mutableStateOf<TaskEntity?>(null) }
+    var movingTask by remember { mutableStateOf<TaskEntity?>(null) }
+    var movingStructure by remember { mutableStateOf<StructureEntity?>(null) }
+
+    fun geomLatLon(json: String?): Pair<Double, Double>? =
+        runCatching {
+            val c = JsonParser.parseString(json).asJsonObject.getAsJsonArray("coordinates")
+            c[1].asDouble to c[0].asDouble
+        }.getOrNull()
+
+    fun focusOnMap(json: String?) {
+        geomLatLon(json)?.let { (lat, lon) ->
+            mapFocus = MapFocus(lat, lon, System.currentTimeMillis())
+            tab = 2
+        }
+    }
 
     val context = LocalContext.current
     var hasLocation by remember {
@@ -180,10 +207,43 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
             }
 
             Box(Modifier.fillMaxSize()) {
+                val moveTask = movingTask
+                val moveStructure = movingStructure
                 when {
                     !s.loaded -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                    tab == 0 -> TaskList(s.tasks, onSetStatus = vm::setStatus)
-                    tab == 1 -> TrailList(s.trails)
+                    moveTask != null ->
+                        PointPickerScreen(
+                            title = "Move \"${moveTask.title}\"",
+                            hasLocation = hasLocation,
+                            initial = geomLatLon(moveTask.geometryJson),
+                            onDone = { lat, lon ->
+                                vm.moveTask(moveTask.id, lat, lon)
+                                movingTask = null
+                            },
+                            onCancel = { movingTask = null },
+                        )
+                    moveStructure != null ->
+                        PointPickerScreen(
+                            title = "Move \"${moveStructure.name}\"",
+                            hasLocation = hasLocation,
+                            initial = geomLatLon(moveStructure.geometryJson),
+                            onDone = { lat, lon ->
+                                structuresVm.moveStructure(moveStructure.id, lat, lon)
+                                movingStructure = null
+                            },
+                            onCancel = { movingStructure = null },
+                        )
+                    tab == 0 ->
+                        TaskList(
+                            s.tasks,
+                            onSetStatus = vm::setStatus,
+                            onOpen = { t -> selected = "task" to t.id; focusOnMap(t.geometryJson) },
+                        )
+                    tab == 1 ->
+                        TrailList(
+                            s.trails,
+                            onOpen = { tr -> selected = "trail" to tr.id; focusOnMap(tr.geometryJson) },
+                        )
                     tab == 2 ->
                         ProjectMap(
                             trails = s.trails,
@@ -192,6 +252,8 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
                             tracks = tracks,
                             hasLocationPermission = hasLocation,
                             modifier = Modifier.fillMaxSize(),
+                            focus = mapFocus,
+                            onFeatureTap = { kind, id -> selected = kind to id },
                         )
                     tab == 3 -> DiscussionTab(messages, onSend = vm::postMessage)
                     tab == 4 -> SegmentWorkTab(workVm, s.trails, hasLocation)
@@ -216,10 +278,214 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
             },
         )
     }
+
+    val sel = selected
+    if (sel != null) {
+        val (kind, id) = sel
+        val task = if (kind == "task") s.tasks.firstOrNull { it.id == id } else null
+        val trail = if (kind == "trail") s.trails.firstOrNull { it.id == id } else null
+        val structure = if (kind == "structure") structures.firstOrNull { it.id == id } else null
+        val track = if (kind == "track") tracks.firstOrNull { it.id == id } else null
+        if (task == null && trail == null && structure == null && track == null) {
+            selected = null
+        } else {
+            ModalBottomSheet(onDismissRequest = { selected = null }) {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    when {
+                        task != null ->
+                            TaskDetailBody(
+                                task = task,
+                                onShowOnMap = { focusOnMap(task.geometryJson); selected = null },
+                                onEdit = { editingTask = task; selected = null },
+                                onToggleDone = {
+                                    vm.setStatus(task.id, if (task.status == "done") "open" else "done")
+                                },
+                                onMove = { movingTask = task; selected = null },
+                            )
+                        structure != null ->
+                            StructureDetailBody(
+                                structure = structure,
+                                onShowOnMap = { focusOnMap(structure.geometryJson); selected = null },
+                                onSetStatus = { structuresVm.setStructureStatus(structure.id, it) },
+                                onMove = { movingStructure = structure; selected = null },
+                                onDelete = { structuresVm.deleteStructure(structure.id); selected = null },
+                            )
+                        trail != null -> {
+                            Text(trail.name, style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                "${trail.activity} · ${trail.status.replace('_', ' ')} · ${km(trail.lengthM)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            OutlinedButton(onClick = { focusOnMap(trail.geometryJson); selected = null }) {
+                                Text("Show on map")
+                            }
+                        }
+                        track != null -> {
+                            Text(track.name, style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                "${km(track.lengthM)} · ${track.pointCount} points · ${track.source}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            OutlinedButton(onClick = { focusOnMap(track.geometryJson); selected = null }) {
+                                Text("Show on map")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    editingTask?.let { t ->
+        EditTaskDialog(
+            task = t,
+            onDismiss = { editingTask = null },
+            onSave = { title, desc, priority ->
+                vm.editTask(t.id, title, desc, priority)
+                editingTask = null
+            },
+        )
+    }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TaskList(tasks: List<TaskEntity>, onSetStatus: (String, String) -> Unit) {
+private fun TaskDetailBody(
+    task: TaskEntity,
+    onShowOnMap: () -> Unit,
+    onEdit: () -> Unit,
+    onToggleDone: () -> Unit,
+    onMove: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        PriorityTag(task.priority)
+        Text(task.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp))
+    }
+    Text(
+        task.status.replace('_', ' ') + if (task.geometryJson == null) " · no location" else "",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (task.description.isNotBlank()) Text(task.description, style = MaterialTheme.typography.bodyMedium)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = onEdit) { Text("Edit") }
+        OutlinedButton(onClick = onToggleDone) {
+            Text(if (task.status == "done") "Reopen" else "Mark done")
+        }
+        OutlinedButton(onClick = onMove) { Text(if (task.geometryJson == null) "Set location" else "Move") }
+        if (task.geometryJson != null) OutlinedButton(onClick = onShowOnMap) { Text("Show on map") }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun StructureDetailBody(
+    structure: StructureEntity,
+    onShowOnMap: () -> Unit,
+    onSetStatus: (String) -> Unit,
+    onMove: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val statuses = listOf("good", "monitor", "needs_repair", "failed", "decommissioned")
+    var confirmDelete by remember { mutableStateOf(false) }
+    Text(structure.name, style = MaterialTheme.typography.titleLarge)
+    Text(
+        structure.structureType.replace('_', ' ') +
+            (if (structure.material.isNotBlank()) " · ${structure.material}" else ""),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (structure.notes.isNotBlank()) Text(structure.notes, style = MaterialTheme.typography.bodyMedium)
+    Text("Status", style = MaterialTheme.typography.labelLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        statuses.forEach { st ->
+            FilterChip(
+                selected = structure.status == st,
+                onClick = { onSetStatus(st) },
+                label = { Text(st.replace('_', ' ')) },
+            )
+        }
+    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = onMove) {
+            Text(if (structure.geometryJson == null) "Set location" else "Move")
+        }
+        if (structure.geometryJson != null) OutlinedButton(onClick = onShowOnMap) { Text("Show on map") }
+        Button(
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error
+            ),
+            onClick = { confirmDelete = true },
+        ) { Text("Delete") }
+    }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete structure?") },
+            text = { Text("\"${structure.name}\" and its inspections will be removed.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EditTaskDialog(
+    task: TaskEntity,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String) -> Unit,
+) {
+    var title by remember { mutableStateOf(task.title) }
+    var desc by remember { mutableStateOf(task.description) }
+    var priority by remember { mutableStateOf(task.priority) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit task") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = desc,
+                    onValueChange = { desc = it },
+                    label = { Text("Description") },
+                    maxLines = 4,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PRIORITIES.forEach { p ->
+                        FilterChip(selected = priority == p, onClick = { priority = p }, label = { Text(p) })
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = title.isNotBlank(), onClick = { onSave(title, desc, priority) }) {
+                Text("Save")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TaskList(
+    tasks: List<TaskEntity>,
+    onSetStatus: (String, String) -> Unit,
+    onOpen: (TaskEntity) -> Unit,
+) {
     if (tasks.isEmpty()) {
         EmptyHint("No tasks in this project yet. Tap + to add one.")
         return
@@ -232,7 +498,7 @@ private fun TaskList(tasks: List<TaskEntity>, onSetStatus: (String, String) -> U
         items(tasks, key = { it.id }) { t ->
             val photos = jsonArraySize(t.photosJson)
             val assignees = jsonArraySize(t.assigneeIdsJson)
-            Card(Modifier.fillMaxWidth()) {
+            Card(onClick = { onOpen(t) }, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         PriorityTag(t.priority)
@@ -273,8 +539,9 @@ private fun TaskList(tasks: List<TaskEntity>, onSetStatus: (String, String) -> U
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TrailList(trails: List<TrailEntity>) {
+private fun TrailList(trails: List<TrailEntity>, onOpen: (TrailEntity) -> Unit) {
     if (trails.isEmpty()) {
         EmptyHint("No trails imported yet.")
         return
@@ -285,7 +552,7 @@ private fun TrailList(trails: List<TrailEntity>) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         items(trails, key = { it.id }) { tr ->
-            Card(Modifier.fillMaxWidth()) {
+            Card(onClick = { onOpen(tr) }, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(tr.name, style = MaterialTheme.typography.titleMedium)
                     Text(

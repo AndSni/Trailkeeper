@@ -1,6 +1,7 @@
 package com.asnidev.trailkeeper.ui.map
 
 import android.annotation.SuppressLint
+import android.graphics.PointF
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -36,12 +37,16 @@ private const val TASK_SRC = "tk-tasks"
 private const val STRUCTURE_SRC = "tk-structures"
 private val LATVIA = LatLng(56.95, 24.6)
 
+/** (lat, lon, nonce) - bump the nonce to re-trigger a fly-to. */
+typealias MapFocus = Triple<Double, Double, Long>
+
 /** Holds the map + style handles once they're ready, plus a one-shot flag so
  * the camera only auto-fits the first time data arrives. */
 private class MapHolder {
     var map: MapLibreMap? = null
     var style: Style? = null
     var fittedCamera = false
+    var lastFocusNonce = 0L
 }
 
 @Composable
@@ -52,10 +57,14 @@ fun ProjectMap(
     tracks: List<TrackEntity>,
     hasLocationPermission: Boolean,
     modifier: Modifier = Modifier,
+    focus: MapFocus? = null,
+    onFeatureTap: (kind: String, id: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val holder = remember { MapHolder() }
+    val onTapHolder = remember { arrayOfNulls<(String, String) -> Unit>(1) }
+    onTapHolder[0] = onFeatureTap
 
     val mapView = remember {
         MapView(context).apply {
@@ -63,6 +72,26 @@ fun ProjectMap(
             getMapAsync { map ->
                 holder.map = map
                 map.cameraPosition = CameraPosition.Builder().target(LATVIA).zoom(6.0).build()
+                map.addOnMapClickListener { latLng ->
+                    val pt: PointF = map.projection.toScreenLocation(latLng)
+                    val hit =
+                        map.queryRenderedFeatures(
+                            pt,
+                            "$TASK_SRC-dot",
+                            "$STRUCTURE_SRC-dot",
+                            "$TRACK_SRC-line",
+                            "$TRAIL_SRC-line",
+                        ).firstOrNull { it.hasProperty("id") && it.hasProperty("kind") }
+                    if (hit != null) {
+                        onTapHolder[0]?.invoke(
+                            hit.getStringProperty("kind"),
+                            hit.getStringProperty("id"),
+                        )
+                        true
+                    } else {
+                        false
+                    }
+                }
                 map.setStyle(Style.Builder().fromUri(STYLE_URL)) { style ->
                     holder.style = style
                     style.addSource(GeoJsonSource(TRAIL_SRC))
@@ -131,7 +160,16 @@ fun ProjectMap(
     AndroidView(
         factory = { mapView },
         modifier = modifier,
-        update = { pushData(holder, trails, tasks, structures, tracks) },
+        update = {
+            pushData(holder, trails, tasks, structures, tracks)
+            if (focus != null && focus.third != holder.lastFocusNonce) {
+                holder.lastFocusNonce = focus.third
+                holder.map?.easeCamera(
+                    CameraUpdateFactory.newLatLngZoom(LatLng(focus.first, focus.second), 16.0),
+                    600,
+                )
+            }
+        },
     )
 }
 

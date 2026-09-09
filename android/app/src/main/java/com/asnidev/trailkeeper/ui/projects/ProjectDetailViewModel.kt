@@ -124,6 +124,23 @@ class ProjectDetailViewModel(private val projectId: String) : ViewModel() {
         viewModelScope.launch { runCatching { SyncRepository.setTaskStatus(taskId, status) } }
     }
 
+    fun editTask(taskId: String, title: String, description: String, priority: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            runCatching {
+                SyncRepository.editTask(taskId, title.trim(), description.trim(), priority)
+            }
+                .onFailure { e -> sync.update { it.copy(error = e.message ?: "Couldn't edit the task") } }
+        }
+    }
+
+    fun moveTask(taskId: String, lat: Double, lon: Double) {
+        viewModelScope.launch {
+            runCatching { SyncRepository.moveTask(taskId, lat, lon) }
+                .onFailure { e -> sync.update { it.copy(error = e.message ?: "Couldn't move the task") } }
+        }
+    }
+
     fun postMessage(body: String) {
         val text = body.trim()
         if (text.isEmpty()) return

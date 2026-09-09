@@ -21,6 +21,7 @@ import com.asnidev.trailkeeper.network.SegmentWorkCreateRequest
 import com.asnidev.trailkeeper.network.SegmentWorkDto
 import com.asnidev.trailkeeper.network.StructureCreateRequest
 import com.asnidev.trailkeeper.network.StructureDto
+import com.asnidev.trailkeeper.network.StructurePatchRequest
 import com.asnidev.trailkeeper.network.TaskCreateRequest
 import com.asnidev.trailkeeper.network.TrackCreateRequest
 import com.asnidev.trailkeeper.network.TrackDto
@@ -112,6 +113,45 @@ object SyncRepository {
         drainOutbox()
     }
 
+    /** Edit a task's text fields. Optimistic + queued through the outbox
+     * (the server's /sync/push already applies title/description/priority). */
+    suspend fun editTask(
+        taskId: String,
+        title: String,
+        description: String,
+        priority: String,
+    ) {
+        val current = db.taskDao().getById(taskId) ?: return
+        db.taskDao().upsert(
+            current.copy(title = title, description = description, priority = priority)
+        )
+        enqueue(
+            "task", taskId, "upsert",
+            baseUpdatedAt = current.updatedAt.ifBlank { null },
+            fields = mapOf(
+                "title" to title,
+                "description" to description,
+                "priority" to priority,
+            ),
+        )
+        drainOutbox()
+    }
+
+    /** Move a task's map point. Optimistic + queued (server re-attaches the
+     * nearest trail on `lat`/`lon`). */
+    suspend fun moveTask(taskId: String, lat: Double, lon: Double) {
+        val current = db.taskDao().getById(taskId) ?: return
+        db.taskDao().upsert(
+            current.copy(geometryJson = """{"type":"Point","coordinates":[$lon,$lat]}""")
+        )
+        enqueue(
+            "task", taskId, "upsert",
+            baseUpdatedAt = current.updatedAt.ifBlank { null },
+            fields = mapOf("lat" to lat, "lon" to lon),
+        )
+        drainOutbox()
+    }
+
     /** Post a comment (project thread when [taskId] is null). Optimistic +
      * queued through the outbox. */
     suspend fun postMessage(projectId: String, taskId: String?, body: String) {
@@ -150,6 +190,21 @@ object SyncRepository {
     suspend fun createStructure(req: StructureCreateRequest) {
         val dto = ApiClient.api().createStructure(req)
         db.structureDao().upsert(dto.toEntity())
+    }
+
+    /** Patch a structure online (status, location, ...); fold the row back. */
+    suspend fun updateStructure(id: String, req: StructurePatchRequest) {
+        val dto = ApiClient.api().updateStructure(id, req)
+        db.structureDao().upsert(dto.toEntity())
+    }
+
+    /** Delete a structure online, then drop it from Room. */
+    suspend fun deleteStructure(id: String) {
+        val resp = ApiClient.api().deleteStructure(id)
+        if (!resp.isSuccessful && resp.code() != 404) {
+            error("Delete failed (${resp.code()})")
+        }
+        db.structureDao().deleteById(id)
     }
 
     /** Record an inspection online. A `condition` may change the structure's

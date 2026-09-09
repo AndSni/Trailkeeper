@@ -58,6 +58,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import com.asnidev.trailkeeper.data.local.InspectionEntity
 import com.asnidev.trailkeeper.data.local.InspectionFormEntity
 import com.asnidev.trailkeeper.data.local.StructureEntity
+import com.asnidev.trailkeeper.ui.common.PointPickerScreen
 import com.google.android.gms.location.LocationServices
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -72,7 +73,43 @@ fun StructuresTab(vm: StructuresViewModel, hasLocation: Boolean) {
     val message by vm.message.collectAsState()
 
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
-    var showAdd by remember { mutableStateOf(false) }
+    // add flow: "none" | "form" | "picking"
+    var addMode by remember { mutableStateOf("none") }
+    var addName by remember { mutableStateOf("") }
+    var addType by remember { mutableStateOf("culvert") }
+    var addMaterial by remember { mutableStateOf("") }
+    var addNotes by remember { mutableStateOf("") }
+    var addPoint by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+
+    if (addMode == "picking") {
+        PointPickerScreen(
+            title = "Place the structure",
+            hasLocation = hasLocation,
+            initial = addPoint,
+            onDone = { lat, lon -> addPoint = lat to lon; addMode = "form" },
+            onCancel = { addMode = "form" },
+        )
+        return
+    }
+    if (addMode == "form") {
+        AddStructureForm(
+            name = addName, onName = { addName = it },
+            type = addType, onType = { addType = it },
+            material = addMaterial, onMaterial = { addMaterial = it },
+            notes = addNotes, onNotes = { addNotes = it },
+            point = addPoint,
+            saving = saving,
+            onPickOnMap = { addMode = "picking" },
+            onClearPoint = { addPoint = null },
+            onCancel = { addMode = "none" },
+            onCreate = {
+                vm.addStructure(addName, addType, addMaterial, addNotes, addPoint?.first, addPoint?.second)
+                addName = ""; addType = "culvert"; addMaterial = ""; addNotes = ""; addPoint = null
+                addMode = "none"
+            },
+        )
+        return
+    }
 
     Column(Modifier.fillMaxSize()) {
         message?.let {
@@ -98,7 +135,7 @@ fun StructuresTab(vm: StructuresViewModel, hasLocation: Boolean) {
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item {
-                    Button(onClick = { showAdd = true }, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { addMode = "form" }, modifier = Modifier.fillMaxWidth()) {
                         Text("Add structure")
                     }
                 }
@@ -139,17 +176,6 @@ fun StructuresTab(vm: StructuresViewModel, hasLocation: Boolean) {
         }
     }
 
-    if (showAdd) {
-        AddStructureDialog(
-            hasLocation = hasLocation,
-            saving = saving,
-            onDismiss = { showAdd = false },
-            onCreate = { name, type, material, notes, lat, lon ->
-                vm.addStructure(name, type, material, notes, lat, lon)
-                showAdd = false
-            },
-        )
-    }
 }
 
 @Composable
@@ -271,110 +297,76 @@ private fun InspectionCard(i: InspectionEntity) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AddStructureDialog(
-    hasLocation: Boolean,
+private fun AddStructureForm(
+    name: String, onName: (String) -> Unit,
+    type: String, onType: (String) -> Unit,
+    material: String, onMaterial: (String) -> Unit,
+    notes: String, onNotes: (String) -> Unit,
+    point: Pair<Double, Double>?,
     saving: Boolean,
-    onDismiss: () -> Unit,
-    onCreate: (String, String, String, String, Double?, Double?) -> Unit,
+    onPickOnMap: () -> Unit,
+    onClearPoint: () -> Unit,
+    onCancel: () -> Unit,
+    onCreate: () -> Unit,
 ) {
-    val context = LocalContext.current
-    var name by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf("culvert") }
     var typeMenu by remember { mutableStateOf(false) }
-    var material by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
-    var useLoc by remember { mutableStateOf(hasLocation) }
-    var loc by remember { mutableStateOf<android.location.Location?>(null) }
-
-    LaunchedEffect(hasLocation) {
-        if (hasLocation) loc = lastLocation(context)
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("New structure", style = MaterialTheme.typography.titleLarge)
+        OutlinedTextField(
+            value = name,
+            onValueChange = onName,
+            label = { Text("Name") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Box {
+            OutlinedButton(onClick = { typeMenu = true }) { Text(type.replace('_', ' ')) }
+            DropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
+                STRUCTURE_TYPES.forEach { t ->
+                    DropdownMenuItem(
+                        text = { Text(t.replace('_', ' ')) },
+                        onClick = { onType(t); typeMenu = false },
+                    )
+                }
+            }
+        }
+        OutlinedTextField(
+            value = material,
+            onValueChange = onMaterial,
+            label = { Text("Material (optional)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = notes,
+            onValueChange = onNotes,
+            label = { Text("Notes") },
+            maxLines = 3,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onPickOnMap) {
+                Text(if (point == null) "Place on map" else "Change location")
+            }
+            if (point != null) {
+                Text(
+                    "%.5f, %.5f".format(point.first, point.second),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = onClearPoint) { Text("Clear") }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = name.isNotBlank() && !saving, onClick = onCreate) {
+                if (saving) CircularProgressIndicator(Modifier.size(16.dp)) else Text("Create")
+            }
+            OutlinedButton(onClick = onCancel) { Text("Cancel") }
+        }
     }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("New structure") },
-        text = {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Box {
-                    OutlinedButton(onClick = { typeMenu = true }) {
-                        Text(type.replace('_', ' '))
-                    }
-                    DropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
-                        STRUCTURE_TYPES.forEach { t ->
-                            DropdownMenuItem(
-                                text = { Text(t.replace('_', ' ')) },
-                                onClick = {
-                                    type = t
-                                    typeMenu = false
-                                },
-                            )
-                        }
-                    }
-                }
-                OutlinedTextField(
-                    value = material,
-                    onValueChange = { material = it },
-                    label = { Text("Material (optional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("Notes") },
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(
-                        checked = useLoc && hasLocation,
-                        onCheckedChange = { useLoc = it },
-                        enabled = hasLocation,
-                    )
-                    Spacer(Modifier.size(8.dp))
-                    Text(
-                        when {
-                            !hasLocation -> "Location permission off"
-                            loc != null -> "Attach current location"
-                            else -> "Attach location (waiting for a fix…)"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = name.isNotBlank() && !saving,
-                onClick = {
-                    val use = useLoc && hasLocation && loc != null
-                    onCreate(
-                        name,
-                        type,
-                        material,
-                        notes,
-                        if (use) loc!!.latitude else null,
-                        if (use) loc!!.longitude else null,
-                    )
-                },
-            ) {
-                Text("Create")
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
