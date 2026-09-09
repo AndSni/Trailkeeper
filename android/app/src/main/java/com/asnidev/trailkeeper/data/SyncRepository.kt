@@ -77,9 +77,21 @@ object SyncRepository {
 
     // ---- write path -----------------------------------------------------
 
-    suspend fun createTask(projectId: String, title: String, priority: String): String {
+    suspend fun createTask(
+        projectId: String,
+        title: String,
+        priority: String,
+        lat: Double? = null,
+        lon: Double? = null,
+    ): String {
         val orgId = Session.currentOrgId() ?: error("not signed in")
         val id = UUID.randomUUID().toString()
+        val geometry =
+            if (lat != null && lon != null) {
+                """{"type":"Point","coordinates":[$lon,$lat]}"""
+            } else {
+                null
+            }
         val optimistic =
             TaskEntity(
                 id = id,
@@ -90,7 +102,7 @@ object SyncRepository {
                 taskType = "",
                 priority = priority,
                 status = "open",
-                geometryJson = null,
+                geometryJson = geometry,
                 nearestTrailId = null,
                 estimateMin = null,
                 assigneeIdsJson = "[]",
@@ -98,10 +110,16 @@ object SyncRepository {
                 updatedAt = "",
             )
         db.taskDao().upsert(optimistic)
-        enqueue(
-            "task", id, "upsert", baseUpdatedAt = null,
-            fields = mapOf("project_id" to projectId, "title" to title, "priority" to priority),
-        )
+        val fields = buildMap {
+            put("project_id", projectId)
+            put("title", title)
+            put("priority", priority)
+            if (lat != null && lon != null) {
+                put("lat", lat)
+                put("lon", lon)
+            }
+        }
+        enqueue("task", id, "upsert", baseUpdatedAt = null, fields = fields)
         drainOutbox()
         return id
     }

@@ -1,6 +1,8 @@
 package com.asnidev.trailkeeper.ui.projects
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,6 +58,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,8 +87,12 @@ import com.asnidev.trailkeeper.data.local.StructureEntity
 import com.asnidev.trailkeeper.data.local.TaskEntity
 import com.asnidev.trailkeeper.data.local.TrailEntity
 import com.asnidev.trailkeeper.data.local.TrackEntity
+import com.google.android.gms.location.LocationServices
 import com.google.gson.JsonParser
+import kotlin.coroutines.resume
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 private val PRIORITIES = listOf("low", "medium", "high", "urgent")
 
@@ -144,6 +151,7 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
     }
 
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var hasLocation by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -306,8 +314,11 @@ fun ProjectDetailScreen(projectId: String, projectName: String, onBack: () -> Un
         AddTaskDialog(
             onDismiss = { showAdd = false },
             onCreate = { title, priority ->
-                vm.addTask(title, priority)
                 showAdd = false
+                scope.launch {
+                    val loc = if (hasLocation) currentDeviceLocation(context) else null
+                    vm.addTask(title, priority, loc?.latitude, loc?.longitude)
+                }
             },
         )
     }
@@ -772,6 +783,15 @@ private fun WalkTrailCard(projectId: String, hasLocation: Boolean, onSave: (Stri
         }
     }
 }
+
+/** Best-effort current fix from the fused provider; null if unavailable. */
+@SuppressLint("MissingPermission")
+private suspend fun currentDeviceLocation(context: Context): android.location.Location? =
+    suspendCancellableCoroutine { cont ->
+        LocationServices.getFusedLocationProviderClient(context).lastLocation
+            .addOnSuccessListener { cont.resume(it) }
+            .addOnFailureListener { cont.resume(null) }
+    }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

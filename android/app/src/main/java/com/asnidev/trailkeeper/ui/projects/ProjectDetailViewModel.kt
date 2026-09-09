@@ -165,11 +165,12 @@ class ProjectDetailViewModel(private val projectId: String) : ViewModel() {
         }
     }
 
-    /** Optimistic - the task shows immediately and syncs when online. */
-    fun addTask(title: String, priority: String) {
+    /** Optimistic - the task shows immediately and syncs when online. Pins the
+     * task to [lat]/[lon] when the caller could resolve a device location. */
+    fun addTask(title: String, priority: String, lat: Double? = null, lon: Double? = null) {
         if (title.isBlank()) return
         viewModelScope.launch {
-            runCatching { SyncRepository.createTask(projectId, title.trim(), priority) }
+            runCatching { SyncRepository.createTask(projectId, title.trim(), priority, lat, lon) }
                 .onFailure { e -> sync.update { it.copy(error = e.message ?: "Couldn't queue the task") } }
         }
     }
