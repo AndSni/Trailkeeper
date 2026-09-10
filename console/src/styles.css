@@ -72,9 +72,22 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px
 .chat-input input { flex: 1; }
 .panel > .chat { flex: 1; }
 
+.map-wrap { flex: 1; min-width: 0; position: relative; display: flex; }
 .map { flex: 1; min-width: 0; }
 .maplibregl-map { height: 100%; }
 .empty { padding: 24px; color: var(--muted); }
+
+.asset-toggle {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2;
+  display: flex; gap: 2px; padding: 3px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+.asset-toggle button {
+  padding: 5px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: transparent; color: var(--muted); border: 0;
+}
+.asset-toggle button.active { background: var(--accent); color: var(--accent-ink); }
 
 /* Collapsible right-side chat dock */
 .chatdock {

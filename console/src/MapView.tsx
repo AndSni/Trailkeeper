@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import type { Snapshot } from "./api";
-import { boundsOf, structureFC, taskFC, trackFC, trailFC } from "./geo";
+import { boundsOf, projectScope, structureFC, taskFC, trackFC, trailFC } from "./geo";
 import type { Bounds } from "./geo";
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
@@ -40,6 +40,25 @@ export function MapView({
   onFeatureClickRef.current = onFeatureClick;
   const pickingRef = useRef(picking);
   pickingRef.current = picking;
+
+  const scope = useMemo(() => (snapshot ? projectScope(snapshot) : null), [snapshot]);
+  const [showAllAssets, setShowAllAssets] = useState(() => {
+    try {
+      return localStorage.getItem("tk_console_assets_all") === "1";
+    } catch {
+      return false;
+    }
+  });
+  // With nothing to frame yet, there's no meaningful "this project" view.
+  const effectiveShowAll = showAllAssets || !scope?.bounds;
+  function changeScope(v: boolean) {
+    setShowAllAssets(v);
+    try {
+      localStorage.setItem("tk_console_assets_all", v ? "1" : "0");
+    } catch {
+      /* private mode - fine */
+    }
+  }
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -87,7 +106,11 @@ export function MapView({
         id: "tk-trails-line",
         type: "line",
         source: "tk-trails",
-        paint: { "line-color": "#3c5a31", "line-width": 3 },
+        paint: {
+          "line-color": "#3c5a31",
+          "line-width": ["case", ["get", "dim"], 1.5, 3],
+          "line-opacity": ["case", ["get", "dim"], 0.28, 1],
+        },
         layout: { "line-cap": "round", "line-join": "round" },
       });
       map.addLayer({
@@ -102,15 +125,17 @@ export function MapView({
         type: "circle",
         source: "tk-structures",
         paint: {
-          "circle-radius": 6,
+          "circle-radius": ["case", ["get", "dim"], 4, 6],
           "circle-color": [
             "case",
             ["all", ["has", "color"], ["!=", ["get", "color"], ""]],
             ["get", "color"],
             "#2f6d7a",
           ],
-          "circle-stroke-width": 2,
+          "circle-opacity": ["case", ["get", "dim"], 0.35, 1],
+          "circle-stroke-width": ["case", ["get", "dim"], 0.5, 2],
           "circle-stroke-color": "#fff",
+          "circle-stroke-opacity": ["case", ["get", "dim"], 0.35, 1],
         },
       });
       map.addLayer({
@@ -157,20 +182,36 @@ export function MapView({
   function pushData() {
     const map = mapRef.current;
     if (!map || !readyRef.current || !snapshot) return;
-    (map.getSource("tk-trails") as maplibregl.GeoJSONSource)?.setData(trailFC(snapshot) as never);
+
+    const dimTrails =
+      effectiveShowAll || !scope
+        ? undefined
+        : new Set(snapshot.trails.map((t) => t.id).filter((id) => !scope.trailIds.has(id)));
+    const dimStructures =
+      effectiveShowAll || !scope
+        ? undefined
+        : new Set(
+            snapshot.structures.map((s) => s.id).filter((id) => !scope.structureIds.has(id)),
+          );
+
+    (map.getSource("tk-trails") as maplibregl.GeoJSONSource)?.setData(
+      trailFC(snapshot, dimTrails) as never,
+    );
     (map.getSource("tk-tracks") as maplibregl.GeoJSONSource)?.setData(trackFC(snapshot) as never);
     (map.getSource("tk-tasks") as maplibregl.GeoJSONSource)?.setData(taskFC(snapshot) as never);
     (map.getSource("tk-structures") as maplibregl.GeoJSONSource)?.setData(
-      structureFC(snapshot) as never,
+      structureFC(snapshot, dimStructures) as never,
     );
 
     if (fittedRef.current !== snapshot.project.id) {
-      const b = boundsOf([
-        ...snapshot.trails.map((t) => t.geometry),
-        ...snapshot.tracks.map((t) => t.geometry),
-        ...snapshot.tasks.map((t) => t.geometry),
-        ...snapshot.structures.map((s) => s.geometry),
-      ]);
+      const b =
+        scope?.bounds ??
+        boundsOf([
+          ...snapshot.trails.map((t) => t.geometry),
+          ...snapshot.tracks.map((t) => t.geometry),
+          ...snapshot.tasks.map((t) => t.geometry),
+          ...snapshot.structures.map((s) => s.geometry),
+        ]);
       if (b) {
         map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 600 });
         fittedRef.current = snapshot.project.id;
@@ -201,7 +242,7 @@ export function MapView({
     );
   }
 
-  useEffect(pushData, [snapshot]);
+  useEffect(pushData, [snapshot, effectiveShowAll]);
   useEffect(pushDraft, [draft]);
 
   useEffect(() => {
@@ -216,5 +257,25 @@ export function MapView({
     if (map) map.getCanvas().style.cursor = picking ? "crosshair" : "";
   }, [picking]);
 
-  return <div className="map" ref={containerRef} />;
+  return (
+    <div className="map-wrap">
+      <div className="map" ref={containerRef} />
+      {scope?.bounds && (
+        <div className="asset-toggle">
+          <button
+            className={effectiveShowAll ? "" : "active"}
+            onClick={() => changeScope(false)}
+          >
+            This project
+          </button>
+          <button
+            className={effectiveShowAll ? "active" : ""}
+            onClick={() => changeScope(true)}
+          >
+            All assets
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }

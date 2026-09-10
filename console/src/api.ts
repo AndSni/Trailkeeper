@@ -150,6 +150,7 @@ export interface Task {
   status: string;
   priority: string;
   geometry: GeoJson | null;
+  nearest_trail_id: string | null;
   photos: TaskPhoto[];
 }
 
