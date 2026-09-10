@@ -206,16 +206,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
     <div className="app">
       <div className="topbar">
         <span className="brand">Trailkeeper</span>
-        <select
-          value={projectId ?? ""}
-          disabled={projects.length === 0}
-          onChange={(e) => setProjectId(e.target.value)}
-        >
-          {projects.length === 0 && <option value="">No projects</option>}
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
+        <ProjectPicker projects={projects} projectId={projectId} onChange={setProjectId} />
         <button className="ghost" disabled={busy} onClick={() => setMode({ kind: "form-project" })}>
           ＋ Project
         </button>
@@ -849,6 +840,69 @@ function Modal({
         <h2>{title}</h2>
         {children}
       </div>
+    </div>
+  );
+}
+
+// A native <select> on Linux/GTK pops its list anchored to the selected item,
+// which can render over the browser chrome. This is a plain button + menu that
+// always drops down below.
+function ProjectPicker({
+  projects,
+  projectId,
+  onChange,
+}: {
+  projects: Project[];
+  projectId: string | null;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = projects.find((p) => p.id === projectId);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="picker" ref={ref}>
+      <button
+        className="ghost picker-btn"
+        disabled={projects.length === 0}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span>{current?.name ?? "No projects"}</span>
+        <span className="picker-caret" aria-hidden>▾</span>
+      </button>
+      {open && projects.length > 0 && (
+        <ul className="picker-menu">
+          {projects.map((p) => (
+            <li key={p.id}>
+              <button
+                className={p.id === projectId ? "active" : ""}
+                onClick={() => {
+                  onChange(p.id);
+                  setOpen(false);
+                }}
+              >
+                {p.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
